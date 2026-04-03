@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MotorScan AI - Experiência Imersiva</title>
+    <style>
+        :root { --neon-cyan: #00ffcc; --neon-red: #ff3333; --dark-bg: #050505; }
+        body { background: var(--dark-bg); color: white; font-family: sans-serif; margin: 0; display: flex; flex-direction: column; align-items: center; }
+        
+        /* Container do Scanner - A Janela para o Carro */
+        .scanner-window { 
+            position: relative; width: 350px; height: 450px; 
+            background: #000; border: 2px solid #222; 
+            border-radius: 20px; overflow: hidden; margin-top: 20px;
+            box-shadow: 0 0 20px rgba(0,255,204,0.2);
+        }
+        
+        /* Camadas de Imagens com Transição Suave */
+        .layer { 
+            position: absolute; width: 100%; height: 100%; 
+            object-fit: contain; transition: all 2.5s ease-in-out; 
+        }
+        
+        #carLayer { z-index: 3; opacity: 1; } /* Foto Real (Argo, Mobi...) */
+        #chassisLayer { z-index: 2; opacity: 0.5; filter: hue-rotate(150deg) brightness(1.2); } /* Esqueleto Azul */
+        #engineLayer { z-index: 4; opacity: 0; transform: scale(0.8); } /* O "Beco" Interno / Motor */
+
+        /* Efeito de Zoom (Entrando no Carro) */
+        .zoom-active { transform: scale(3) rotate(5deg); filter: blur(8px); opacity: 0 !important; }
+        .engine-active { opacity: 1 !important; transform: scale(1) !important; }
+
+        /* Simulação de Ondas Sonoras */
+        .waves { 
+            position: absolute; bottom: 30px; width: 100%; 
+            display: flex; justify-content: center; gap: 4px; 
+            opacity: 0; transition: 0.5s; z-index: 5;
+        }
+        .bar { width: 4px; height: 15px; background: var(--neon-cyan); animation: audio 0.4s infinite alternate; }
+        @keyframes audio { from { height: 5px; } to { height: 40px; } }
+
+        /* Painel de Controle */
+        .panel { width: 340px; padding: 20px; text-align: center; }
+        select, button { 
+            width: 100%; padding: 15px; margin: 10px 0; 
+            border-radius: 10px; border: 1px solid #333; 
+            background: #111; color: white; font-weight: bold;
+        }
+        button { background: var(--neon-cyan); color: black; border: none; cursor: pointer; }
+        #status { font-size: 0.8rem; color: var(--neon-cyan); text-transform: uppercase; margin-top: 10px; }
+    </style>
+</head>
+<body>
+
+    <div class="scanner-window">
+        <img src="generic/1 (1).jpg" id="chassisLayer" class="layer">
+        <img src="argo/1 (1).jpg" id="carLayer" class="layer">
+        <img src="ui/1 (1).jpg" id="engineLayer" class="layer">
+
+        <div class="waves" id="audioWaves">
+            <div class="bar" style="animation-delay: 0.1s"></div>
+            <div class="bar" style="animation-delay: 0.3s"></div>
+            <div class="bar" style="animation-delay: 0.2s"></div>
+            <div class="bar" style="animation-delay: 0.4s"></div>
+        </div>
+    </div>
+
+    <div class="panel">
+        <select id="carSelect" onchange="atualizarCarro()">
+            <option value="argo">FIAT ARGO</option>
+            <option value="mobi">FIAT MOBI</option>
+            <option value="corolla">TOYOTA COROLLA</option>
+            <option value="renegade">JEEP RENEGADE</option>
+        </select>
+
+        <button onclick="iniciarExperienca()">INICIAR PASSEIO TÉCNICO</button>
+        <div id="status">SISTEMA PRONTO. SELECIONE O MODELO.</div>
+    </div>
+
+    <script>
+        const car = document.getElementById('carLayer');
+        const engine = document.getElementById('engineLayer');
+        const status = document.getElementById('status');
+        const waves = document.getElementById('audioWaves');
+
+        function atualizarCarro() {
+            const modelo = document.getElementById('carSelect').value;
+            car.src = `${modelo}/1 (1).jpg`;
+            car.classList.remove('zoom-active');
+            engine.classList.remove('engine-active');
+            status.innerText = "VEÍCULO SINCRONIZADO NA MATRIZ.";
+        }
+
+        function iniciarExperienca() {
+            status.innerText = "CAPTURANDO ACÚSTICA... ENTRE NO VEÍCULO";
+            waves.style.opacity = "1";
+            
+            // Inicia o efeito de "entrar" no carro (Zoom e Transparência)
+            setTimeout(() => {
+                car.classList.add('zoom-active');
+                status.innerText = "NAVEGANDO PELAS ESQUINAS DO MOTOR...";
+            }, 1000);
+
+            // Revela a imagem interna (o "beco" técnico)
+            setTimeout(() => {
+                engine.classList.add('engine-active');
+                waves.style.opacity = "0";
+                status.innerHTML = "<b style='color:red'>DETECÇÃO:</b> FALHA NA CÂMARA DE COMBUSTÃO.";
+            }, 3500);
+        }
+    </script>
+</body>
+</html>
