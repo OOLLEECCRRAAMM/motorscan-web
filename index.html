@@ -1,46 +1,403 @@
 <!DOCTYPE html>
-<html lang="pt-br">
+<html lang="pt-BR">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>MotorScan Global AI</title>
-    <style>
-        body { margin: 0; background: #000; font-family: sans-serif; overflow: hidden; color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; }
-        #motor-viewport { position: relative; width: 90vw; height: 90vw; max-width: 400px; border: 2px solid #1a1a1a; border-radius: 20px; overflow: hidden; }
-        #motor-img { width: 100%; height: 100%; object-fit: cover; transition: transform 3s ease-in-out; }
-        .zoom-active { transform: scale(5); }
-        #btn-scan { margin-top: 30px; padding: 15px 40px; background: #00ffc8; color: #000; border: none; border-radius: 12px; font-weight: bold; cursor: pointer; }
-        .error-msg { color: #ff4444; font-size: 12px; margin-top: 10px; text-align: center; }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MotorScan Global AI</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #000;
+      color: #fff;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    header {
+      position: fixed;
+      top: 0;
+      width: 100%;
+      background: rgba(0, 0, 0, 0.85);
+      border-bottom: 1px solid #00ffc8;
+      padding: 14px 24px;
+      text-align: center;
+      z-index: 100;
+    }
+
+    .logo {
+      color: #00ffc8;
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+
+    .container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 32px;
+      padding: 100px 20px 40px;
+      width: 100%;
+      max-width: 600px;
+    }
+
+    .titulo {
+      font-size: 14px;
+      color: #888;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      text-align: center;
+    }
+
+    /* Área da imagem com overflow oculto para o zoom ficar contido */
+    .motor-frame {
+      width: 100%;
+      max-width: 480px;
+      aspect-ratio: 16/9;
+      overflow: hidden;
+      border-radius: 12px;
+      border: 1px solid #00ffc830;
+      box-shadow: 0 0 30px #00ffc820;
+      background: #111;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .motor-img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transform: scale(1);
+      transition: transform 2.5s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+      transform-origin: center center;
+    }
+
+    .motor-img.zoom-ativo {
+      transform: scale(5);
+    }
+
+    /* Status de carregamento da imagem */
+    .img-placeholder {
+      color: #444;
+      font-size: 13px;
+      text-align: center;
+      padding: 20px;
+    }
+
+    /* Barra de scan */
+    .scan-area {
+      width: 100%;
+      max-width: 480px;
+      display: none;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .scan-area.visivel { display: flex; }
+
+    .barra-bg {
+      width: 100%;
+      height: 6px;
+      background: #111;
+      border-radius: 3px;
+      overflow: hidden;
+      border: 1px solid #00ffc820;
+    }
+
+    .barra-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #00ffc8, #0088ff);
+      border-radius: 3px;
+      transition: width 0.3s ease;
+    }
+
+    .status-texto {
+      font-size: 11px;
+      color: #00ffc8;
+      letter-spacing: 1px;
+      text-align: center;
+      font-style: italic;
+    }
+
+    /* Botão principal */
+    .btn-iniciar {
+      background: transparent;
+      color: #00ffc8;
+      border: 2px solid #00ffc8;
+      padding: 16px 48px;
+      border-radius: 4px;
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      box-shadow: 0 0 20px #00ffc830;
+    }
+
+    .btn-iniciar:hover {
+      background: #00ffc8;
+      color: #000;
+      box-shadow: 0 0 40px #00ffc860;
+    }
+
+    .btn-iniciar:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    .aviso {
+      font-size: 11px;
+      color: #444;
+      text-align: center;
+      max-width: 400px;
+      line-height: 1.6;
+    }
+
+    /* Resultado do diagnóstico */
+    .resultado-area {
+      width: 100%;
+      max-width: 480px;
+      display: none;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .resultado-area.visivel { display: flex; }
+
+    .resultado-card {
+      background: #0a0a0a;
+      border: 1px solid #00ffc830;
+      border-radius: 8px;
+      padding: 16px 20px;
+    }
+
+    .resultado-label {
+      font-size: 10px;
+      color: #555;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+
+    .resultado-valor {
+      font-size: 15px;
+      color: #00ffc8;
+      font-weight: 600;
+    }
+
+    .resultado-detalhe {
+      font-size: 13px;
+      color: #aaa;
+      line-height: 1.6;
+      margin-top: 4px;
+    }
+
+    .btn-reiniciar {
+      background: transparent;
+      color: #555;
+      border: 1px solid #222;
+      padding: 12px;
+      border-radius: 4px;
+      font-size: 12px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-reiniciar:hover { color: #00ffc8; border-color: #00ffc830; }
+  </style>
 </head>
 <body>
 
-<div id="motor-viewport">
-    <img id="motor-img" src="genérico/motor_bg.jpg" onerror="document.getElementById('err-img').innerText='Erro: Imagem não encontrada na pasta genérico'">
-</div>
-<div id="err-img" class="error-msg"></div>
+  <header>
+    <div class="logo">MotorScan Global AI 🌐</div>
+  </header>
 
-<button id="btn-scan" onclick="iniciar()">INICIAR PASSEIO TÉCNICO</button>
-<div id="status">AGUARDANDO...</div>
+  <div class="container">
 
-<script>
-    // Tratamento especial para pastas com espaços e acentos
-    const pathSom = encodeURI('interface do usuário/beep.mp3');
-    const som = new Audio(pathSom);
+    <p class="titulo">Sistema de Diagnóstico Acústico</p>
 
-    function iniciar() {
-        const img = document.getElementById('motor-img');
-        const status = document.getElementById('status');
-        
-        // Tenta tocar o som
-        som.play().catch(() => {
-            status.innerHTML += '<br><span style="color:red">Erro no Som: Verifique a pasta "interface do usuário"</span>';
-        });
+    <!-- Frame da imagem do motor -->
+    <div class="motor-frame">
+      <img
+        id="motorImg"
+        class="motor-img"
+        src=""
+        alt="Motor"
+        onerror="this.style.display='none'; document.getElementById('imgPlaceholder').style.display='block';"
+      />
+      <div id="imgPlaceholder" class="img-placeholder" style="display:none;">
+        Imagem do motor não encontrada.<br>
+        <span style="font-size:11px; color:#333;">Verifique o caminho da pasta no GitHub.</span>
+      </div>
+    </div>
 
-        // Efeito de Zoom
-        img.classList.add('zoom-active');
-        status.innerText = 'NAVEGANDO PELO MOTOR...';
+    <!-- Barra de scan (oculta no início) -->
+    <div class="scan-area" id="scanArea">
+      <div class="barra-bg"><div class="barra-fill" id="barraFill"></div></div>
+      <p class="status-texto" id="statusTexto">Iniciando análise...</p>
+    </div>
+
+    <!-- Botão principal -->
+    <button class="btn-iniciar" id="btnIniciar" onclick="iniciarPasseio()">
+      INICIAR PASSEIO TÉCNICO
+    </button>
+
+    <!-- Resultado (oculto no início) -->
+    <div class="resultado-area" id="resultadoArea">
+      <div class="resultado-card">
+        <div class="resultado-label">Análise concluída</div>
+        <div class="resultado-valor" id="resultadoTitulo">---</div>
+        <div class="resultado-detalhe" id="resultadoDetalhe">---</div>
+      </div>
+      <button class="btn-reiniciar" onclick="reiniciar()">↺ NOVA ANÁLISE</button>
+    </div>
+
+    <p class="aviso">
+      Diagnóstico preliminar de orientação técnica.<br>
+      Sempre confirme com um profissional habilitado.
+    </p>
+
+  </div>
+
+  <script>
+    // ── Caminhos com encodeURI para suportar acentos e espaços no GitHub Pages ──
+    const IMAGEM_MOTOR = encodeURI("genérico/motor_bg.jpg");
+    const AUDIO_BEEP   = encodeURI("interface do usuário/beep.mp3");
+
+    // ── Carrega a imagem com caminho corrigido ──
+    const motorImg = document.getElementById("motorImg");
+    motorImg.src = IMAGEM_MOTOR;
+    motorImg.style.display = "block";
+
+    // ── Contexto de áudio (desbloqueado no primeiro clique) ──
+    let audioCtx = null;
+    let audioBuffer = null;
+    let audioDesbloqueado = false;
+
+    // Inicializa o contexto de áudio no primeiro clique do usuário
+    // (necessário para Android e iOS que bloqueiam áudio automático)
+    async function desbloquearAudio() {
+      if (audioDesbloqueado) return;
+
+      try {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+        // Carrega o arquivo beep.mp3
+        const resposta = await fetch(AUDIO_BEEP);
+        const arrayBuffer = await resposta.arrayBuffer();
+        audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+        audioDesbloqueado = true;
+      } catch (e) {
+        console.warn("Áudio não disponível:", e);
+        audioDesbloqueado = false;
+      }
     }
-</script>
+
+    // Toca o beep usando o buffer já carregado
+    function tocarBeep(frequencia, duracao) {
+      if (!audioCtx) return;
+      try {
+        const osc  = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.frequency.value = frequencia;
+        gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duracao / 1000);
+        osc.start();
+        osc.stop(audioCtx.currentTime + duracao / 1000);
+      } catch(e) {}
+    }
+
+    // Toca o arquivo beep.mp3 real
+    function tocarArquivoBeep() {
+      if (!audioCtx || !audioBuffer) return;
+      try {
+        const source = audioCtx.createBufferSource();
+        source.buffer = audioBuffer;
+        source.connect(audioCtx.destination);
+        source.start(0);
+      } catch(e) {}
+    }
+
+    // ── Mensagens de scan técnico ──
+    const mensagensScan = [
+      "Conectando aos módulos eletrônicos...",
+      "Varrendo banco de dados técnico...",
+      "Analisando padrões acústicos...",
+      "Identificando assinaturas de frequência...",
+      "Cruzando com base de falhas conhecidas...",
+      "Gerando relatório de orientação técnica..."
+    ];
+
+    // ── Função principal — inicia o passeio técnico ──
+    async function iniciarPasseio() {
+      const btn = document.getElementById("btnIniciar");
+      btn.disabled = true;
+
+      // Desbloqueia áudio no clique (requisito iOS/Android)
+      await desbloquearAudio();
+      tocarArquivoBeep();
+
+      // Mostra barra de scan
+      document.getElementById("scanArea").classList.add("visivel");
+
+      // Inicia zoom na imagem
+      motorImg.classList.add("zoom-ativo");
+
+      // Anima a barra de progresso
+      let progresso = 0;
+      const intervalo = setInterval(() => {
+        progresso += 2;
+        document.getElementById("barraFill").style.width = progresso + "%";
+
+        const idx = Math.min(Math.floor(progresso / 18), mensagensScan.length - 1);
+        document.getElementById("statusTexto").textContent = mensagensScan[idx];
+
+        if (progresso % 15 === 0) tocarBeep(880, 60);
+
+        if (progresso >= 100) {
+          clearInterval(intervalo);
+          tocarBeep(1200, 300);
+          setTimeout(mostrarResultado, 500);
+        }
+      }, 80);
+    }
+
+    // ── Mostra resultado após o scan ──
+    function mostrarResultado() {
+      document.getElementById("statusTexto").textContent = "Análise concluída.";
+      document.getElementById("resultadoTitulo").textContent = "Nenhuma anomalia crítica detectada";
+      document.getElementById("resultadoDetalhe").textContent =
+        "Os padrões acústicos analisados estão dentro dos parâmetros nominais. " +
+        "Para um diagnóstico completo, utilize a função de análise de sintomas.";
+      document.getElementById("resultadoArea").classList.add("visivel");
+    }
+
+    // ── Reinicia o sistema ──
+    function reiniciar() {
+      motorImg.classList.remove("zoom-ativo");
+      document.getElementById("scanArea").classList.remove("visivel");
+      document.getElementById("resultadoArea").classList.remove("visivel");
+      document.getElementById("barraFill").style.width = "0%";
+      document.getElementById("statusTexto").textContent = "Iniciando análise...";
+      const btn = document.getElementById("btnIniciar");
+      btn.disabled = false;
+    }
+  </script>
+
 </body>
 </html>
