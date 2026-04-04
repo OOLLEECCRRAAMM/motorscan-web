@@ -5,132 +5,42 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>MotorScan Global AI</title>
     <style>
-        body {
-            margin: 0;
-            background: #000;
-            font-family: sans-serif;
-            overflow: hidden;
-            color: #fff;
-        }
-
-        #app-container {
-            position: relative;
-            width: 100vw;
-            height: 100vh;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-        }
-
-        #motor-viewport {
-            position: relative;
-            width: 90vw;
-            height: 90vw;
-            max-width: 400px;
-            max-height: 400px;
-            border: 2px solid #1a1a1a;
-            border-radius: 20px;
-            overflow: hidden;
-            box-shadow: 0 0 20px rgba(0, 255, 200, 0.2);
-            background: #050505;
-        }
-
-        #motor-img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            display: block;
-            transition: transform 3s cubic-bezier(0.45, 0.05, 0.55, 0.95), filter 3s ease, opacity 3s ease;
-        }
-
-        .zoom-active {
-            transform: scale(5) translate(10%, 10%);
-            filter: blur(2px);
-            opacity: 0.5;
-        }
-
-        #btn-scan {
-            margin-top: 30px;
-            padding: 15px 40px;
-            font-size: 18px;
-            font-weight: bold;
-            background: #00ffc8;
-            color: #000;
-            border: none;
-            border-radius: 12px;
-            cursor: pointer;
-            text-transform: uppercase;
-            box-shadow: 0 4px 15px rgba(0, 255, 200, 0.4);
-            z-index: 10;
-        }
-
-        #status-text {
-            margin-top: 15px;
-            font-size: 12px;
-            color: #00ffc8;
-            letter-spacing: 1px;
-            opacity: 0.8;
-            text-align: center;
-        }
-
-        #debug {
-            margin-top: 10px;
-            font-size: 11px;
-            color: #ff6b6b;
-            text-align: center;
-            min-height: 14px;
-            padding: 0 16px;
-        }
+        body { margin: 0; background: #000; font-family: sans-serif; overflow: hidden; color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; }
+        #motor-viewport { position: relative; width: 90vw; height: 90vw; max-width: 400px; border: 2px solid #1a1a1a; border-radius: 20px; overflow: hidden; }
+        #motor-img { width: 100%; height: 100%; object-fit: cover; transition: transform 3s ease-in-out; }
+        .zoom-active { transform: scale(5); }
+        #btn-scan { margin-top: 30px; padding: 15px 40px; background: #00ffc8; color: #000; border: none; border-radius: 12px; font-weight: bold; cursor: pointer; }
+        .error-msg { color: #ff4444; font-size: 12px; margin-top: 10px; text-align: center; }
     </style>
 </head>
 <body>
 
-<div id="app-container">
-    <div id="motor-viewport">
-        <img id="motor-img" src="genérico/motor_bg.jpg" alt="Motor">
-    </div>
-
-    <button id="btn-scan">Iniciar Passeio Técnico</button>
-    <div id="status-text">AGUARDANDO COMANDO...</div>
-    <div id="debug"></div>
+<div id="motor-viewport">
+    <img id="motor-img" src="genérico/motor_bg.jpg" onerror="document.getElementById('err-img').innerText='Erro: Imagem não encontrada na pasta genérico'">
 </div>
+<div id="err-img" class="error-msg"></div>
+
+<button id="btn-scan" onclick="iniciar()">INICIAR PASSEIO TÉCNICO</button>
+<div id="status">AGUARDANDO...</div>
 
 <script>
-    const somScan = new Audio('interface%20do%20usuário/beep.mp3');
-    somScan.preload = 'auto';
+    // Tratamento especial para pastas com espaços e acentos
+    const pathSom = encodeURI('interface do usuário/beep.mp3');
+    const som = new Audio(pathSom);
 
-    const img = document.getElementById('motor-img');
-    const btn = document.getElementById('btn-scan');
-    const status = document.getElementById('status-text');
-    const debug = document.getElementById('debug');
+    function iniciar() {
+        const img = document.getElementById('motor-img');
+        const status = document.getElementById('status');
+        
+        // Tenta tocar o som
+        som.play().catch(() => {
+            status.innerHTML += '<br><span style="color:red">Erro no Som: Verifique a pasta "interface do usuário"</span>';
+        });
 
-    async function iniciarDiagnostico() {
-        debug.textContent = '';
-
-        try {
-            somScan.currentTime = 0;
-            await somScan.play();
-        } catch (e) {
-            console.log("Áudio bloqueado ou não encontrado:", e);
-            debug.textContent = 'O som não tocou. Verifique se beep.mp3 está na pasta interface do usuário.';
-        }
-
+        // Efeito de Zoom
         img.classList.add('zoom-active');
-        btn.style.display = 'none';
-        status.innerText = 'NAVEGANDO PELAS ESQUINAS DO MOTOR...';
-
-        setTimeout(() => {
-            status.innerText = 'MAPEAMENTO CONCLUÍDO. GERANDO LAUDO...';
-        }, 3500);
+        status.innerText = 'NAVEGANDO PELO MOTOR...';
     }
-
-    btn.addEventListener('click', iniciarDiagnostico);
-
-    img.addEventListener('error', () => {
-        debug.textContent = 'A imagem não carregou. Verifique se o caminho genérico/motor_bg.jpg está correto.';
-    });
 </script>
-
 </body>
 </html>
