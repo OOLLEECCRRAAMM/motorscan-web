@@ -11,9 +11,9 @@
     .logo { color: #00ffc8; font-size: 18px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; }
     .container { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 25px; padding: 80px 20px 20px; width: 100%; max-width: 500px; }
     .titulo { font-size: 12px; color: #888; letter-spacing: 2px; text-transform: uppercase; text-align: center; }
-    .motor-frame { width: 100%; aspect-ratio: 16/9; overflow: hidden; border-radius: 12px; border: 1px solid #00ffc830; box-shadow: 0 0 30px #00ffc820; background: #111; position: relative; }
-    .motor-img { width: 100%; height: 100%; object-fit: cover; transition: transform 3s cubic-bezier(0.25, 0.46, 0.45, 0.94); }
-    .motor-img.zoom-ativo { transform: scale(5); }
+    .motor-frame { width: 100%; aspect-ratio: 16/9; overflow: hidden; border-radius: 12px; border: 1px solid #00ffc830; box-shadow: 0 0 30px #00ffc820; background: #111; position: relative; display: flex; align-items: center; justify-content: center; }
+    .motor-img { width: 100%; height: 100%; object-fit: cover; transition: transform 3s ease-in-out; transform-origin: center; }
+    .motor-img.zoom-ativo { transform: scale(2.5); } /* Reduzi o zoom de 5x para 2.5x para não "perder" a imagem */
     .scan-area { width: 100%; display: none; flex-direction: column; gap: 8px; }
     .scan-area.visivel { display: flex; }
     .barra-bg { width: 100%; height: 6px; background: #111; border-radius: 3px; overflow: hidden; border: 1px solid #00ffc820; }
@@ -35,7 +35,7 @@
 <div class="container">
   <p class="titulo">Sistema de Diagnóstico Acústico</p>
   <div class="motor-frame">
-    <img id="motorImg" class="motor-img" src="generic/motor_bg.jpg" alt="Motor">
+    <img id="motorImg" class="motor-img" src="generic/motor_bg.jpg" onerror="this.src='generic/motor_bg.JPG'" alt="Visualização do Motor">
   </div>
 
   <div class="scan-area" id="scanArea">
@@ -48,7 +48,7 @@
   <div class="resultado-area" id="resultadoArea">
     <div class="resultado-card">
       <div class="resultado-valor">Análise concluída</div>
-      <div class="resultado-detalhe">Nenhuma anomalia crítica detectada. Os padrões acústicos estão dentro dos parâmetros nominais.</div>
+      <div class="resultado-detalhe">Nenhuma anomalia crítica detectada. Padrões acústicos estáveis.</div>
     </div>
     <button class="btn-reiniciar" onclick="window.location.reload()">↺ NOVA ANÁLISE</button>
   </div>
@@ -58,19 +58,17 @@
 let audioCtx = null;
 let audioBuffer = null;
 
-// Pré-carrega o som para não ter atraso
 async function carregarAudio() {
     try {
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         const resposta = await fetch('ui/beep.mp3');
         const arrayBuffer = await resposta.arrayBuffer();
         audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
-    } catch (e) { console.log("Erro ao carregar som:", e); }
+    } catch (e) { console.log("Erro de áudio:", e); }
 }
 carregarAudio();
 
 function iniciarPasseio() {
-    // Tocar Som
     if (audioCtx && audioBuffer) {
         const source = audioCtx.createBufferSource();
         source.buffer = audioBuffer;
@@ -78,12 +76,10 @@ function iniciarPasseio() {
         source.start(0);
     }
 
-    // Efeito Visual
     document.getElementById("motorImg").classList.add("zoom-ativo");
     document.getElementById("btnIniciar").style.display = "none";
     document.getElementById("scanArea").classList.add("visivel");
 
-    // Simular Progresso
     let progresso = 0;
     const barra = document.getElementById("barraFill");
     const texto = document.getElementById("statusTexto");
@@ -91,16 +87,14 @@ function iniciarPasseio() {
     const intervalo = setInterval(() => {
         progresso += 1;
         barra.style.width = progresso + "%";
-        
-        if(progresso == 30) texto.innerText = "Analisando frequências harmônicas...";
-        if(progresso == 70) texto.innerText = "Comparando com banco de dados AI...";
-
+        if(progresso == 30) texto.innerText = "Analisando frequências...";
+        if(progresso == 70) texto.innerText = "Cruzando dados AI...";
         if (progresso >= 100) {
             clearInterval(intervalo);
             document.getElementById("scanArea").style.display = "none";
             document.getElementById("resultadoArea").classList.add("visivel");
         }
-    }, 50); // Velocidade da barra
+    }, 50);
 }
 </script>
 </body>
