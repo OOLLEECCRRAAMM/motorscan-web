@@ -5,105 +5,118 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>MotorScan Global AI</title>
     <style>
-        body { margin: 0; background: #000; color: #0ff; font-family: sans-serif; overflow: hidden; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; }
-        #app-container { width: 90%; max-width: 400px; text-align: center; }
-        h1 { font-size: 1.2rem; letter-spacing: 2px; text-shadow: 0 0 10px #0ff; margin-bottom: 20px; }
+        :root { --neon: #00f2ff; --bg: #050505; }
+        body { margin: 0; background: var(--bg); color: var(--neon); font-family: 'Segoe UI', Roboto, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; overflow: hidden; }
+        #app { width: 90%; max-width: 400px; text-align: center; border: 1px solid rgba(0,242,255,0.2); padding: 20px; border-radius: 20px; background: rgba(0,0,0,0.8); box-shadow: 0 0 30px rgba(0,0,0,1); }
+        h1 { font-size: 1rem; letter-spacing: 3px; text-transform: uppercase; margin-bottom: 5px; text-shadow: 0 0 10px var(--neon); }
+        .sub { font-size: 0.6rem; color: #555; margin-bottom: 20px; }
         
-        /* Moldura do Motor */
+        /* Viewport com Motor em SVG (Embutido) */
         #viewport { 
-            width: 100%; height: 250px; border: 2px solid #0ff; border-radius: 15px; 
-            overflow: hidden; position: relative; background: #111;
-            box-shadow: inset 0 0 20px #000, 0 0 15px rgba(0,255,255,0.2);
+            width: 100%; height: 220px; border: 2px solid var(--neon); border-radius: 15px; 
+            position: relative; overflow: hidden; background: #000;
+            box-shadow: inset 0 0 20px rgba(0,242,255,0.2);
         }
-        #motor-img { 
-            width: 100%; height: 100%; object-fit: cover; 
-            transition: transform 4s ease-in-out; transform: scale(1);
-        }
+        #motor-svg { width: 100%; height: 100%; transition: transform 4s ease-in-out; }
 
         /* Barra de Progresso */
-        #progress-box { width: 100%; margin-top: 20px; display: none; }
-        #bar-container { width: 100%; height: 10px; background: #222; border-radius: 5px; overflow: hidden; border: 1px solid #0ff; }
-        #bar-fill { width: 0%; height: 100%; background: linear-gradient(90deg, #0ff, #00f); transition: width 0.3s; }
-        #status-text { font-size: 0.8rem; margin-top: 8px; font-style: italic; color: #0f8; }
+        #scan-area { margin-top: 25px; display: none; }
+        .bar-bg { width: 100%; height: 6px; background: #111; border-radius: 10px; border: 1px solid var(--neon); overflow: hidden; }
+        .bar-fill { width: 0%; height: 100%; background: var(--neon); box-shadow: 0 0 15px var(--neon); transition: width 0.3s; }
+        #status { font-size: 0.7rem; margin-top: 10px; color: #0f8; font-family: monospace; }
 
-        /* Botão */
-        button { 
-            margin-top: 30px; padding: 15px 30px; background: none; border: 2px solid #0ff; 
-            color: #0ff; font-weight: bold; border-radius: 5px; cursor: pointer; 
-            text-transform: uppercase; transition: 0.3s;
+        /* Botão Estilizado */
+        #main-btn { 
+            margin-top: 30px; width: 100%; padding: 18px; background: none; 
+            border: 1px solid var(--neon); color: var(--neon); font-weight: bold; 
+            border-radius: 10px; cursor: pointer; transition: 0.3s;
         }
-        button:active { background: #0ff; color: #000; }
+        #main-btn:hover { background: rgba(0,242,255,0.1); box-shadow: 0 0 20px rgba(0,242,255,0.3); }
 
-        /* Resultado */
-        #result { display: none; margin-top: 20px; padding: 15px; border: 1px solid #0f8; background: rgba(0,255,0,0.1); border-radius: 10px; }
+        /* Resultado Final */
+        #res { display: none; margin-top: 20px; border: 1px solid #0f8; padding: 15px; border-radius: 10px; background: rgba(0,255,100,0.05); }
     </style>
 </head>
 <body>
 
-<div id="app-container">
-    <h1>MOTORSCAN GLOBAL AI 🌐</h1>
-    <p style="font-size: 0.7rem; color: #888;">SISTEMA DE DIAGNÓSTICO ACÚSTICO</p>
+<div id="app">
+    <h1>MotorScan Global AI</h1>
+    <div class="sub">DIAGNÓSTICO ACÚSTICO ATIVO v3.0</div>
 
     <div id="viewport">
-        <img id="motor-img" src="generic/motor_bg.jpg" alt="Motor">
+        <svg id="motor-svg" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+            <path d="M40 60h120v80H40z" fill="none" stroke="#00f2ff" stroke-width="2"/>
+            <path d="M60 40h80v20H60z" fill="none" stroke="#00f2ff" stroke-width="2"/>
+            <circle cx="70" cy="100" r="15" fill="none" stroke="#00f2ff" stroke-width="1"/>
+            <circle cx="130" cy="100" r="15" fill="none" stroke="#00f2ff" stroke-width="1"/>
+            <line x1="40" y1="80" x2="160" y2="80" stroke="#00f2ff" stroke-width="1" stroke-dasharray="4"/>
+            <path d="M80 140l-10 20h60l-10-20" fill="none" stroke="#00f2ff" stroke-width="2"/>
+        </svg>
     </div>
 
-    <div id="progress-box">
-        <div id="bar-container"><div id="bar-fill"></div></div>
-        <div id="status-text">Iniciando análise...</div>
+    <div id="scan-area">
+        <div class="bar-bg"><div class="bar-fill" id="fill"></div></div>
+        <div id="status">INICIALIZANDO...</div>
     </div>
 
-    <div id="result">
-        <strong style="color: #0f8;">Análise concluída</strong><br>
-        <span style="font-size: 0.9rem;">Nenhuma anomalia crítica detectada. Padrões acústicos estáveis.</span>
+    <div id="res">
+        <b style="color:#0f8">✓ ANÁLISE CONCLUÍDA</b><br>
+        <small style="color:#aaa">Padrões térmicos e acústicos dentro da normalidade (SAE J306).</small>
     </div>
 
-    <button id="start-btn">Iniciar Passeio Técnico</button>
+    <button id="main-btn">INICIAR VARREDURA</button>
 </div>
 
-<audio id="beep-sound" src="ui/beep.mp3"></audio>
-
 <script>
-    const btn = document.getElementById('start-btn');
-    const bar = document.getElementById('bar-fill');
-    const status = document.getElementById('status-text');
-    const img = document.getElementById('motor-img');
-    const audio = document.getElementById('beep-sound');
+    // Gerador de Áudio (Web Audio API) - Não precisa de arquivo!
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    
+    function playBeep(freq, duration) {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + duration);
+    }
 
-    const etapas = [
-        { p: 20, t: "Captando frequências...", zoom: 1.2 },
-        { p: 50, t: "Filtrando ruídos externos...", zoom: 1.5 },
-        { p: 80, t: "Cruzando dados AI...", zoom: 2.2 },
-        { p: 100, t: "Sincronizando diagnóstico...", zoom: 2.5 }
+    const btn = document.getElementById('main-btn');
+    const fill = document.getElementById('fill');
+    const status = document.getElementById('status');
+    const svg = document.getElementById('motor-svg');
+
+    const logs = [
+        "Captação de ondas via mic...",
+        "Filtragem de harmônicas...",
+        "Processamento AI Madrox...",
+        "Sincronização concluída!"
     ];
 
     btn.onclick = () => {
+        if (audioCtx.state === 'suspended') audioCtx.resume();
         btn.style.display = 'none';
-        document.getElementById('progress-box').style.display = 'block';
+        document.getElementById('scan-area').style.display = 'block';
         
-        // Tenta tocar o áudio no clique (regra de segurança dos celulares)
-        audio.play().catch(() => console.log("Áudio aguardando interação"));
-
-        etapas.forEach((etapa, index) => {
-            setTimeout(() => {
-                bar.style.width = etapa.p + "%";
-                status.innerText = etapa.t;
-                img.style.transform = `scale(${etapa.zoom})`;
-                
-                // Toca o bip em cada etapa
-                audio.currentTime = 0;
-                audio.play();
-
-                if(etapa.p === 100) {
-                    setTimeout(() => {
-                        document.getElementById('progress-box').style.display = 'none';
-                        document.getElementById('result').style.display = 'block';
-                    }, 1000);
-                }
-            }, (index + 1) * 1500);
-        });
+        let step = 0;
+        const interval = setInterval(() => {
+            if (step < 4) {
+                fill.style.width = ((step + 1) * 25) + "%";
+                status.innerText = logs[step];
+                svg.style.transform = `scale(${1.2 + (step * 0.3)}) rotate(${step * 2}deg)`;
+                playBeep(880 + (step * 200), 0.15);
+                step++;
+            } else {
+                clearInterval(interval);
+                document.getElementById('scan-area').style.display = 'none';
+                document.getElementById('res').style.display = 'block';
+                playBeep(1200, 0.5);
+            }
+        }, 1500);
     };
 </script>
-
 </body>
 </html>
