@@ -1,101 +1,109 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-br">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>MotorScan Global AI</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { background: #000; color: #fff; font-family: 'Segoe UI', Tahoma, sans-serif; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; overflow: hidden; }
-    header { position: fixed; top: 0; width: 100%; background: rgba(0, 0, 0, 0.85); border-bottom: 1px solid #00ffc8; padding: 14px; text-align: center; z-index: 100; }
-    .logo { color: #00ffc8; font-size: 18px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; }
-    .container { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 25px; padding: 80px 20px 20px; width: 100%; max-width: 500px; }
-    .titulo { font-size: 12px; color: #888; letter-spacing: 2px; text-transform: uppercase; text-align: center; }
-    .motor-frame { width: 100%; aspect-ratio: 16/9; overflow: hidden; border-radius: 12px; border: 1px solid #00ffc830; box-shadow: 0 0 30px #00ffc820; background: #111; position: relative; display: flex; align-items: center; justify-content: center; }
-    .motor-img { width: 100%; height: 100%; object-fit: cover; transition: transform 3s ease-in-out; transform-origin: center; }
-    .motor-img.zoom-ativo { transform: scale(2.5); } /* Reduzi o zoom de 5x para 2.5x para não "perder" a imagem */
-    .scan-area { width: 100%; display: none; flex-direction: column; gap: 8px; }
-    .scan-area.visivel { display: flex; }
-    .barra-bg { width: 100%; height: 6px; background: #111; border-radius: 3px; overflow: hidden; border: 1px solid #00ffc820; }
-    .barra-fill { height: 100%; width: 0%; background: linear-gradient(90deg, #00ffc8, #0088ff); transition: width 0.1s linear; }
-    .status-texto { font-size: 11px; color: #00ffc8; text-align: center; font-style: italic; }
-    .btn-iniciar { background: transparent; color: #00ffc8; border: 2px solid #00ffc8; padding: 16px 30px; border-radius: 4px; font-size: 14px; font-weight: 700; letter-spacing: 2px; cursor: pointer; box-shadow: 0 0 20px #00ffc830; }
-    .resultado-area { width: 100%; display: none; flex-direction: column; gap: 12px; }
-    .resultado-area.visivel { display: flex; }
-    .resultado-card { background: #0a0a0a; border: 1px solid #00ffc830; border-radius: 8px; padding: 16px; }
-    .resultado-valor { font-size: 15px; color: #00ffc8; font-weight: 600; margin-bottom: 5px; }
-    .resultado-detalhe { font-size: 13px; color: #aaa; line-height: 1.5; }
-    .btn-reiniciar { background: transparent; color: #555; border: 1px solid #222; padding: 10px; border-radius: 4px; font-size: 11px; cursor: pointer; margin-top: 10px; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>MotorScan Global AI</title>
+    <style>
+        body { margin: 0; background: #000; color: #0ff; font-family: sans-serif; overflow: hidden; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; }
+        #app-container { width: 90%; max-width: 400px; text-align: center; }
+        h1 { font-size: 1.2rem; letter-spacing: 2px; text-shadow: 0 0 10px #0ff; margin-bottom: 20px; }
+        
+        /* Moldura do Motor */
+        #viewport { 
+            width: 100%; height: 250px; border: 2px solid #0ff; border-radius: 15px; 
+            overflow: hidden; position: relative; background: #111;
+            box-shadow: inset 0 0 20px #000, 0 0 15px rgba(0,255,255,0.2);
+        }
+        #motor-img { 
+            width: 100%; height: 100%; object-fit: cover; 
+            transition: transform 4s ease-in-out; transform: scale(1);
+        }
+
+        /* Barra de Progresso */
+        #progress-box { width: 100%; margin-top: 20px; display: none; }
+        #bar-container { width: 100%; height: 10px; background: #222; border-radius: 5px; overflow: hidden; border: 1px solid #0ff; }
+        #bar-fill { width: 0%; height: 100%; background: linear-gradient(90deg, #0ff, #00f); transition: width 0.3s; }
+        #status-text { font-size: 0.8rem; margin-top: 8px; font-style: italic; color: #0f8; }
+
+        /* Botão */
+        button { 
+            margin-top: 30px; padding: 15px 30px; background: none; border: 2px solid #0ff; 
+            color: #0ff; font-weight: bold; border-radius: 5px; cursor: pointer; 
+            text-transform: uppercase; transition: 0.3s;
+        }
+        button:active { background: #0ff; color: #000; }
+
+        /* Resultado */
+        #result { display: none; margin-top: 20px; padding: 15px; border: 1px solid #0f8; background: rgba(0,255,0,0.1); border-radius: 10px; }
+    </style>
 </head>
 <body>
 
-<header><div class="logo">MotorScan Global AI 🌐</div></header>
+<div id="app-container">
+    <h1>MOTORSCAN GLOBAL AI 🌐</h1>
+    <p style="font-size: 0.7rem; color: #888;">SISTEMA DE DIAGNÓSTICO ACÚSTICO</p>
 
-<div class="container">
-  <p class="titulo">Sistema de Diagnóstico Acústico</p>
-  <div class="motor-frame">
-    <img id="motorImg" class="motor-img" src="generic/motor_bg.jpg" onerror="this.src='generic/motor_bg.JPG'" alt="Visualização do Motor">
-  </div>
-
-  <div class="scan-area" id="scanArea">
-    <div class="barra-bg"><div class="barra-fill" id="barraFill"></div></div>
-    <p class="status-texto" id="statusTexto">Iniciando análise...</p>
-  </div>
-
-  <button class="btn-iniciar" id="btnIniciar" onclick="iniciarPasseio()">INICIAR PASSEIO TÉCNICO</button>
-
-  <div class="resultado-area" id="resultadoArea">
-    <div class="resultado-card">
-      <div class="resultado-valor">Análise concluída</div>
-      <div class="resultado-detalhe">Nenhuma anomalia crítica detectada. Padrões acústicos estáveis.</div>
+    <div id="viewport">
+        <img id="motor-img" src="generic/motor_bg.jpg" alt="Motor">
     </div>
-    <button class="btn-reiniciar" onclick="window.location.reload()">↺ NOVA ANÁLISE</button>
-  </div>
+
+    <div id="progress-box">
+        <div id="bar-container"><div id="bar-fill"></div></div>
+        <div id="status-text">Iniciando análise...</div>
+    </div>
+
+    <div id="result">
+        <strong style="color: #0f8;">Análise concluída</strong><br>
+        <span style="font-size: 0.9rem;">Nenhuma anomalia crítica detectada. Padrões acústicos estáveis.</span>
+    </div>
+
+    <button id="start-btn">Iniciar Passeio Técnico</button>
 </div>
 
+<audio id="beep-sound" src="ui/beep.mp3"></audio>
+
 <script>
-let audioCtx = null;
-let audioBuffer = null;
+    const btn = document.getElementById('start-btn');
+    const bar = document.getElementById('bar-fill');
+    const status = document.getElementById('status-text');
+    const img = document.getElementById('motor-img');
+    const audio = document.getElementById('beep-sound');
 
-async function carregarAudio() {
-    try {
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        const resposta = await fetch('ui/beep.mp3');
-        const arrayBuffer = await resposta.arrayBuffer();
-        audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
-    } catch (e) { console.log("Erro de áudio:", e); }
-}
-carregarAudio();
+    const etapas = [
+        { p: 20, t: "Captando frequências...", zoom: 1.2 },
+        { p: 50, t: "Filtrando ruídos externos...", zoom: 1.5 },
+        { p: 80, t: "Cruzando dados AI...", zoom: 2.2 },
+        { p: 100, t: "Sincronizando diagnóstico...", zoom: 2.5 }
+    ];
 
-function iniciarPasseio() {
-    if (audioCtx && audioBuffer) {
-        const source = audioCtx.createBufferSource();
-        source.buffer = audioBuffer;
-        source.connect(audioCtx.destination);
-        source.start(0);
-    }
+    btn.onclick = () => {
+        btn.style.display = 'none';
+        document.getElementById('progress-box').style.display = 'block';
+        
+        // Tenta tocar o áudio no clique (regra de segurança dos celulares)
+        audio.play().catch(() => console.log("Áudio aguardando interação"));
 
-    document.getElementById("motorImg").classList.add("zoom-ativo");
-    document.getElementById("btnIniciar").style.display = "none";
-    document.getElementById("scanArea").classList.add("visivel");
+        etapas.forEach((etapa, index) => {
+            setTimeout(() => {
+                bar.style.width = etapa.p + "%";
+                status.innerText = etapa.t;
+                img.style.transform = `scale(${etapa.zoom})`;
+                
+                // Toca o bip em cada etapa
+                audio.currentTime = 0;
+                audio.play();
 
-    let progresso = 0;
-    const barra = document.getElementById("barraFill");
-    const texto = document.getElementById("statusTexto");
-
-    const intervalo = setInterval(() => {
-        progresso += 1;
-        barra.style.width = progresso + "%";
-        if(progresso == 30) texto.innerText = "Analisando frequências...";
-        if(progresso == 70) texto.innerText = "Cruzando dados AI...";
-        if (progresso >= 100) {
-            clearInterval(intervalo);
-            document.getElementById("scanArea").style.display = "none";
-            document.getElementById("resultadoArea").classList.add("visivel");
-        }
-    }, 50);
-}
+                if(etapa.p === 100) {
+                    setTimeout(() => {
+                        document.getElementById('progress-box').style.display = 'none';
+                        document.getElementById('result').style.display = 'block';
+                    }, 1000);
+                }
+            }, (index + 1) * 1500);
+        });
+    };
 </script>
+
 </body>
 </html>
