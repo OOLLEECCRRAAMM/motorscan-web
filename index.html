@@ -889,13 +889,18 @@ function irPara(tela) {
 // THREE.JS — GÊMEO DIGITAL 3D
 // ════════════════════════════════
 let renderer3d, cena3d, camera3d, grupoCarro;
-let rotX = 0.1, rotY = 0.4, zoomCam = 6;
+let zoomCam = 6;
 let arrastando = false, uxAnt = 0, uyAnt = 0, distPinca = 0;
 let autoRot = true, modoRaioX = false;
 let camAlvo = new THREE.Vector3(0, 2, 6);
 let lookAlvo = new THREE.Vector3(0, 0, 0);
 let luzP1, luzP2, particulas3d;
 let animId3d = null;
+
+// Quaternion — rotação livre sem Gimbal Lock
+let quatCarro = new THREE.Quaternion();
+let autoRotQuat = new THREE.Quaternion();
+let eixoAutoRot = new THREE.Vector3(0, 1, 0);
 
 function inicializarCanvas3D() {
   const canvas = document.getElementById("canvas3d");
@@ -933,13 +938,44 @@ function inicializarCanvas3D() {
   particulas3d = new THREE.Points(gP, new THREE.PointsMaterial({color:0x00d4ff,size:.05,transparent:true,opacity:.35}));
   cena3d.add(particulas3d);
 
-  // Eventos de toque/mouse
+  // Eventos de toque/mouse — Quaternion para rotação correta
   canvas.addEventListener("mousedown", e=>{ arrastando=true; uxAnt=e.clientX; uyAnt=e.clientY; autoRot=false; });
-  canvas.addEventListener("mousemove", e=>{ if(!arrastando)return; rotY+=(e.clientX-uxAnt)*.01; rotX+=(e.clientY-uyAnt)*.008; uxAnt=e.clientX; uyAnt=e.clientY; });
+  canvas.addEventListener("mousemove", e=>{
+    if(!arrastando) return;
+    const dx = e.clientX - uxAnt;
+    const dy = e.clientY - uyAnt;
+    // Rotação no eixo Y (horizontal) — sempre no sentido do cursor
+    const qY = new THREE.Quaternion();
+    qY.setFromAxisAngle(new THREE.Vector3(0,1,0), dx * 0.01);
+    // Rotação no eixo X (vertical) — relativa à orientação atual
+    const qX = new THREE.Quaternion();
+    qX.setFromAxisAngle(new THREE.Vector3(1,0,0), dy * 0.01);
+    quatCarro.premultiply(qY).premultiply(qX);
+    uxAnt=e.clientX; uyAnt=e.clientY;
+  });
   canvas.addEventListener("mouseup", ()=>arrastando=false);
-  canvas.addEventListener("wheel", e=>{ zoomCam+=e.deltaY*.01; zoomCam=Math.max(2.5,Math.min(10,zoomCam)); });
-  canvas.addEventListener("touchstart", e=>{ autoRot=false; if(e.touches.length===1){uxAnt=e.touches[0].clientX;uyAnt=e.touches[0].clientY;}else{distPinca=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);} },{passive:true});
-  canvas.addEventListener("touchmove", e=>{ if(e.touches.length===1){rotY+=(e.touches[0].clientX-uxAnt)*.012;rotX+=(e.touches[0].clientY-uyAnt)*.009;uxAnt=e.touches[0].clientX;uyAnt=e.touches[0].clientY;}else{const nd=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);zoomCam-=(nd-distPinca)*.02;zoomCam=Math.max(2.5,Math.min(10,zoomCam));distPinca=nd;} },{passive:true});
+  canvas.addEventListener("mouseleave", ()=>arrastando=false);
+  canvas.addEventListener("wheel", e=>{ zoomCam+=e.deltaY*.01; zoomCam=Math.max(2.5,Math.min(12,zoomCam)); });
+  canvas.addEventListener("touchstart", e=>{
+    autoRot=false;
+    if(e.touches.length===1){uxAnt=e.touches[0].clientX;uyAnt=e.touches[0].clientY;}
+    else{distPinca=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);}
+  },{passive:true});
+  canvas.addEventListener("touchmove", e=>{
+    if(e.touches.length===1){
+      const dx=e.touches[0].clientX-uxAnt;
+      const dy=e.touches[0].clientY-uyAnt;
+      const qY=new THREE.Quaternion();
+      qY.setFromAxisAngle(new THREE.Vector3(0,1,0), dx*0.012);
+      const qX=new THREE.Quaternion();
+      qX.setFromAxisAngle(new THREE.Vector3(1,0,0), dy*0.012);
+      quatCarro.premultiply(qY).premultiply(qX);
+      uxAnt=e.touches[0].clientX; uyAnt=e.touches[0].clientY;
+    } else {
+      const nd=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
+      zoomCam-=(nd-distPinca)*.02; zoomCam=Math.max(2.5,Math.min(12,zoomCam)); distPinca=nd;
+    }
+  },{passive:true});
 
   animar3d();
 }
@@ -1030,7 +1066,8 @@ function alternarRaioX() {
 }
 function resetarCamera() {
   camAlvo.set(0,2,6); lookAlvo.set(0,0,0);
-  rotX=.1; rotY=.4; zoomCam=6; autoRot=true;
+  quatCarro.identity(); // Reseta para posição original
+  zoomCam=6; autoRot=true;
   document.querySelectorAll(".painel-item").forEach(e=>e.classList.remove("ativo"));
   document.getElementById("btn-motor")?.classList.add("ativo");
   document.getElementById("freqComp").textContent = "MOTOR";
@@ -1047,15 +1084,20 @@ function fecharModal() { document.getElementById("modalOverlay").classList.remov
 function animar3d(t=0) {
   animId3d = requestAnimationFrame(animar3d);
   if (telaAtiva !== "t-home") return;
-  if (autoRot) rotY += .003;
-  grupoCarro.rotation.y = rotY;
-  grupoCarro.rotation.x = rotX;
-  camera3d.position.lerp(new THREE.Vector3(
-    Math.sin(rotY)*zoomCam*Math.cos(rotX),
-    Math.sin(rotX)*zoomCam,
-    Math.cos(rotY)*zoomCam*Math.cos(rotX)
-  ), .08);
+
+  // Auto rotação suave via Quaternion
+  if (autoRot) {
+    autoRotQuat.setFromAxisAngle(eixoAutoRot, 0.003);
+    quatCarro.premultiply(autoRotQuat);
+  }
+
+  // Aplica quaternion ao grupo do carro
+  grupoCarro.quaternion.copy(quatCarro);
+
+  // Câmera orbita suavemente ao redor do centro
+  camera3d.position.lerp(new THREE.Vector3(0, 1.5, zoomCam), .06);
   camera3d.lookAt(lookAlvo);
+
   if(luzP1) luzP1.intensity = 1.5+Math.sin(t*.002)*.5;
   if(luzP2) luzP2.intensity = 1.2+Math.cos(t*.003)*.3;
   if(particulas3d) particulas3d.rotation.y += .0003;
@@ -1416,8 +1458,7 @@ function voarePara(peca) {
   document.getElementById("statusPill").textContent = "NAVEGANDO → " + info.nome;
 
   // Reseta rotação para visão frontal da peça
-  rotX = 0;
-  rotY = 0;
+  quatCarro.identity();
 
   // Abre modal após a câmera chegar
   setTimeout(() => abrirModal(info.nome, info.info), 800);
