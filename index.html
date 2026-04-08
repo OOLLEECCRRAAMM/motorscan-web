@@ -403,7 +403,50 @@
     .registro-card.moderado { border-left-color: var(--amarelo); }
     .registro-card.atencao { border-left-color: var(--azul); }
 
-    /* ── BARRA DE NAVEGAÇÃO INFERIOR ── */
+    /* ── SETAS STREET VIEW ── */
+    .seta-nav {
+      position: fixed;
+      z-index: 15;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      cursor: pointer;
+      transition: all .2s;
+      pointer-events: all;
+    }
+    .seta-nav:hover .seta-circulo { transform: scale(1.15); border-color: var(--verde); }
+    .seta-nav:hover .seta-label { color: var(--verde); }
+
+    .seta-circulo {
+      width: 44px; height: 44px;
+      border-radius: 50%;
+      border: 2px solid var(--azul);
+      background: rgba(0,20,40,.85);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px;
+      backdrop-filter: blur(8px);
+      transition: all .2s;
+      box-shadow: 0 0 12px rgba(0,212,255,.3);
+      animation: pulsarSeta 2s ease-in-out infinite;
+    }
+    @keyframes pulsarSeta {
+      0%,100%{ box-shadow: 0 0 8px rgba(0,212,255,.3); }
+      50%{ box-shadow: 0 0 20px rgba(0,212,255,.6); }
+    }
+    .seta-label {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 9px; color: var(--azul);
+      letter-spacing: 1px; text-align: center;
+      transition: color .2s;
+    }
+
+    /* Linha conectora das setas */
+    .seta-linha {
+      position: fixed; z-index: 14;
+      pointer-events: none;
+      border-top: 1px dashed rgba(0,212,255,.2);
+    }
     .nav-bottom {
       position: fixed; bottom: 0; left: 0; right: 0;
       z-index: 200;
@@ -484,6 +527,31 @@
 <div class="header">
   <div class="logo">Motor<span>Scan</span> AI</div>
   <div class="status-pill" id="statusPill">SISTEMA ATIVO</div>
+</div>
+
+<!-- Setas de navegação estilo Street View -->
+<div id="setas-nav" style="display:none;">
+  <div class="seta-nav" style="top:35%;left:50%;transform:translateX(-50%);" onclick="voarePara('motor')">
+    <div class="seta-circulo">⬆️</div><div class="seta-label">MOTOR</div>
+  </div>
+  <div class="seta-nav" style="top:50%;right:180px;transform:translateY(-50%);" onclick="voarePara('correia')">
+    <div class="seta-circulo">➡️</div><div class="seta-label">CORREIA</div>
+  </div>
+  <div class="seta-nav" style="bottom:120px;left:35%;transform:translateX(-50%);" onclick="voarePara('freios')">
+    <div class="seta-circulo">⬇️</div><div class="seta-label">FREIOS</div>
+  </div>
+  <div class="seta-nav" style="top:60%;left:180px;transform:translateY(-50%);" onclick="voarePara('suspensao')">
+    <div class="seta-circulo">⬅️</div><div class="seta-label">SUSPENSÃO</div>
+  </div>
+  <div class="seta-nav" style="bottom:120px;right:180px;" onclick="voarePara('escape')">
+    <div class="seta-circulo">↙️</div><div class="seta-label">ESCAPE</div>
+  </div>
+</div>
+
+<!-- Botão navegação -->
+<div style="position:fixed;top:60px;right:16px;z-index:15;">
+  <button class="btn-ctrl btn-azul" style="font-size:10px;padding:6px 12px;"
+    onclick="alternarSetas()" id="btnSetas">🧭 NAVEGAÇÃO</button>
 </div>
 
 <!-- ══════════════════════════════
@@ -867,11 +935,11 @@ function inicializarCanvas3D() {
 
   // Eventos de toque/mouse
   canvas.addEventListener("mousedown", e=>{ arrastando=true; uxAnt=e.clientX; uyAnt=e.clientY; autoRot=false; });
-  canvas.addEventListener("mousemove", e=>{ if(!arrastando)return; rotY+=(e.clientX-uxAnt)*.01; rotX+=(e.clientY-uyAnt)*.008; rotX=Math.max(-.8,Math.min(.8,rotX)); uxAnt=e.clientX; uyAnt=e.clientY; });
+  canvas.addEventListener("mousemove", e=>{ if(!arrastando)return; rotY+=(e.clientX-uxAnt)*.01; rotX+=(e.clientY-uyAnt)*.008; uxAnt=e.clientX; uyAnt=e.clientY; });
   canvas.addEventListener("mouseup", ()=>arrastando=false);
   canvas.addEventListener("wheel", e=>{ zoomCam+=e.deltaY*.01; zoomCam=Math.max(2.5,Math.min(10,zoomCam)); });
   canvas.addEventListener("touchstart", e=>{ autoRot=false; if(e.touches.length===1){uxAnt=e.touches[0].clientX;uyAnt=e.touches[0].clientY;}else{distPinca=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);} },{passive:true});
-  canvas.addEventListener("touchmove", e=>{ if(e.touches.length===1){rotY+=(e.touches[0].clientX-uxAnt)*.012;rotX+=(e.touches[0].clientY-uyAnt)*.009;rotX=Math.max(-.8,Math.min(.8,rotX));uxAnt=e.touches[0].clientX;uyAnt=e.touches[0].clientY;}else{const nd=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);zoomCam-=(nd-distPinca)*.02;zoomCam=Math.max(2.5,Math.min(10,zoomCam));distPinca=nd;} },{passive:true});
+  canvas.addEventListener("touchmove", e=>{ if(e.touches.length===1){rotY+=(e.touches[0].clientX-uxAnt)*.012;rotX+=(e.touches[0].clientY-uyAnt)*.009;uxAnt=e.touches[0].clientX;uyAnt=e.touches[0].clientY;}else{const nd=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);zoomCam-=(nd-distPinca)*.02;zoomCam=Math.max(2.5,Math.min(10,zoomCam));distPinca=nd;} },{passive:true});
 
   animar3d();
 }
@@ -1312,6 +1380,54 @@ function renderizarProntuario() {
         <div style="font-size:11px;color:rgba(255,255,255,.3);margin-top:2px;">Base: ${item.base||"---"}</div>
       </div>`;
   });
+}
+
+// ════════════════════════════════
+// SETAS DE NAVEGAÇÃO STREET VIEW
+// ════════════════════════════════
+let setasVisiveis = false;
+
+function alternarSetas() {
+  setasVisiveis = !setasVisiveis;
+  document.getElementById("setas-nav").style.display = setasVisiveis ? "block" : "none";
+  document.getElementById("btnSetas").style.borderColor = setasVisiveis ? "var(--verde)" : "var(--azul)";
+  document.getElementById("btnSetas").style.color = setasVisiveis ? "var(--verde)" : "var(--azul)";
+  autoRot = false;
+}
+
+function voarePara(peca) {
+  const info = infoPecas[peca];
+  if (!info) return;
+
+  // Desativa rotação automática
+  autoRot = false;
+
+  // Atualiza painel lateral
+  document.querySelectorAll(".painel-item").forEach(e => e.classList.remove("ativo"));
+  document.getElementById("btn-" + peca)?.classList.add("ativo");
+
+  // Define destino da câmera
+  camAlvo.set(...info.cam);
+  lookAlvo.set(...(info.look || [0, 0, 0]));
+
+  // Atualiza display
+  document.getElementById("freqComp").textContent = info.nome;
+  document.getElementById("freqValor").textContent = info.hz;
+  document.getElementById("statusPill").textContent = "NAVEGANDO → " + info.nome;
+
+  // Reseta rotação para visão frontal da peça
+  rotX = 0;
+  rotY = 0;
+
+  // Abre modal após a câmera chegar
+  setTimeout(() => abrirModal(info.nome, info.info), 800);
+
+  // Oculta setas durante o voo
+  document.getElementById("setas-nav").style.opacity = "0.3";
+  setTimeout(() => {
+    document.getElementById("setas-nav").style.opacity = "1";
+    document.getElementById("statusPill").textContent = "SISTEMA ATIVO";
+  }, 1200);
 }
 
 // Inicializa o 3D ao carregar
