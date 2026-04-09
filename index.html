@@ -771,6 +771,14 @@
 
     <div class="aviso-box">⚠️ Orientação preliminar — confirme sempre com um profissional habilitado</div>
 
+    <!-- Botões de compartilhamento -->
+    <div style="display:flex;gap:10px;">
+      <button class="btn-resultado" style="flex:1;background:rgba(37,211,102,.1);border-color:#25d366;color:#25d366;font-size:13px;"
+        onclick="compartilharWhatsApp()">📲 WHATSAPP</button>
+      <button class="btn-resultado" style="flex:1;background:rgba(0,212,255,.08);border-color:var(--azul);color:var(--azul);font-size:13px;"
+        onclick="copiarResultado()" id="btnCopiar">📋 COPIAR</button>
+    </div>
+
     <button class="btn-resultado btn-azul" style="border-color:var(--azul);color:var(--azul);"
       onclick="irPara('t-home')">VER GÊMEO DIGITAL</button>
 
@@ -1563,6 +1571,50 @@ function voarePara(peca) {
     document.getElementById("setas-nav").style.opacity = "1";
     document.getElementById("statusPill").textContent = "SISTEMA ATIVO";
   }, 1200);
+}
+
+// ════════════════════════════════
+// COMPARTILHAMENTO
+// ════════════════════════════════
+function compartilharWhatsApp() {
+  const d = diagAtual;
+  if (!d) return;
+  const msg = `🚗 *MotorScan AI — Diagnóstico do meu veículo*\n\n` +
+    `🔍 *Problema:* ${d.problema}\n` +
+    `⚡ *Causa:* ${d.causa}\n` +
+    `🚨 *Urgência:* ${d.status?.toUpperCase()}\n` +
+    `📊 *Confiança:* ${d.conf || 0}%\n\n` +
+    `💡 *Recomendação:*\n${d.rec || d.recomendacao}\n\n` +
+    `⚠️ _Orientação preliminar — confirme com um profissional._\n\n` +
+    `🌐 Teste você também: https://motorscan-web.vercel.app`;
+
+  const url = `https://wa.me/?text=${encodeURIComponent(msg)}`;
+  window.open(url, "_blank");
+}
+
+function copiarResultado() {
+  const d = diagAtual;
+  if (!d) return;
+  const texto = `MotorScan AI — Diagnóstico do veículo\n\n` +
+    `Problema: ${d.problema}\n` +
+    `Causa: ${d.causa}\n` +
+    `Urgência: ${d.status?.toUpperCase()}\n` +
+    `Confiança: ${d.conf || 0}%\n\n` +
+    `Recomendação:\n${d.rec || d.recomendacao}\n\n` +
+    `Orientação preliminar — confirme com um profissional.\n\n` +
+    `Teste você também: https://motorscan-web.vercel.app`;
+
+  navigator.clipboard.writeText(texto).then(() => {
+    const btn = document.getElementById("btnCopiar");
+    btn.textContent = "✅ COPIADO!";
+    btn.style.borderColor = "var(--verde)";
+    btn.style.color = "var(--verde)";
+    setTimeout(() => {
+      btn.textContent = "📋 COPIAR";
+      btn.style.borderColor = "var(--azul)";
+      btn.style.color = "var(--azul)";
+    }, 2500);
+  });
 }
 
 // Inicializa o 3D ao carregar — remove classe oculto da home
