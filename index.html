@@ -1408,36 +1408,28 @@ async function analisarAudioGravado() {
   dadosAnalise = { sintomas: ["análise_acústica"], descricao: `Gravação de ${segsGrav}s` };
   irParaProcessando();
 
-  // Chama o Gemini API via backend seguro
-  try {
-    const resposta = await fetch("/api/gemini", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        dadosFrequencia: resumoFreq,
-        sintomas: [],
-        descricao: `Análise acústica de ${segsGrav} segundos de gravação do motor`
-      })
-    });
+  // Chama o Gemini API com retry e timeout
+  const veiculo = JSON.parse(localStorage.getItem("motorscanVeiculo") || "null");
+  const diagGemini = await chamarGemini({
+    dadosFrequencia: resumoFreq,
+    sintomas: [],
+    descricao: `Análise acústica de ${segsGrav} segundos de gravação do motor`,
+    veiculo: veiculo ? `${veiculo.marca} ${veiculo.modelo} ${veiculo.ano}` : "não informado"
+  });
 
-    const dados = await resposta.json();
-    if (dados.diagnostico) {
-      const d = dados.diagnostico;
-      diagAtual = {
-        problema: d.problema,
-        causa: d.causa,
-        status: d.status,
-        rec: d.recomendacao,
-        conf: d.confianca,
-        base: `Análise acústica IA — ${segsGrav}s de gravação`,
-        origemIA: true
-      };
-      window._hipoteses = (d.hipoteses || []).map(h => ({
-        causa: h.causa, conf: h.confianca
-      }));
-    }
-  } catch (e) {
-    console.warn("Gemini indisponível, usando análise local:", e);
+  if (diagGemini) {
+    diagAtual = {
+      problema: diagGemini.problema,
+      causa: diagGemini.causa,
+      status: diagGemini.status,
+      rec: diagGemini.recomendacao,
+      conf: diagGemini.confianca,
+      base: `Análise acústica IA — ${segsGrav}s de gravação`,
+      origemIA: true
+    };
+    window._hipoteses = (diagGemini.hipoteses || []).map(h => ({
+      causa: h.causa, conf: h.confianca
+    }));
   }
 
   // Completa a barra e exibe resultado
@@ -1491,35 +1483,27 @@ async function coletarSintomas() {
   document.getElementById("descricaoUsuario").value="";
   irParaProcessando();
 
-  // Chama o Gemini API via backend seguro
-  try {
-    const resposta = await fetch("/api/gemini", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        sintomas: sintomas.map(s => nomesLegiveis[s] || s),
-        descricao: descricao || ""
-      })
-    });
+  // Chama o Gemini API com retry e timeout
+  const veiculo = JSON.parse(localStorage.getItem("motorscanVeiculo") || "null");
+  const diagGemini = await chamarGemini({
+    sintomas: sintomas.map(s => nomesLegiveis[s] || s),
+    descricao: descricao || "",
+    veiculo: veiculo ? `${veiculo.marca} ${veiculo.modelo} ${veiculo.ano}` : "não informado"
+  });
 
-    const dados = await resposta.json();
-    if (dados.diagnostico) {
-      const d = dados.diagnostico;
-      diagAtual = {
-        problema: d.problema,
-        causa: d.causa,
-        status: d.status,
-        rec: d.recomendacao,
-        conf: d.confianca,
-        base: sintomas.map(s=>nomesLegiveis[s]||s).join(", "),
-        origemIA: true
-      };
-      window._hipoteses = (d.hipoteses || []).map(h => ({
-        causa: h.causa, conf: h.confianca
-      }));
-    }
-  } catch (e) {
-    console.warn("Gemini indisponível, usando análise local:", e);
+  if (diagGemini) {
+    diagAtual = {
+      problema: diagGemini.problema,
+      causa: diagGemini.causa,
+      status: diagGemini.status,
+      rec: diagGemini.recomendacao,
+      conf: diagGemini.confianca,
+      base: sintomas.map(s=>nomesLegiveis[s]||s).join(", "),
+      origemIA: true
+    };
+    window._hipoteses = (diagGemini.hipoteses || []).map(h => ({
+      causa: h.causa, conf: h.confianca
+    }));
   }
 
   // Completa a barra e exibe resultado
@@ -1774,6 +1758,55 @@ function voarePara(peca) {
     document.getElementById("setas-nav").style.opacity = "1";
     document.getElementById("statusPill").textContent = "SISTEMA ATIVO";
   }, 1200);
+}
+
+// ════════════════════════════════
+// GEMINI API — COM RETRY E TIMEOUT
+// ════════════════════════════════
+async function chamarGemini(payload, tentativa=1) {
+  const TIMEOUT = 8000; // 8 segundos
+  const MAX_TENTATIVAS = 2;
+
+  try {
+    // Promise com timeout
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), TIMEOUT);
+
+    const resposta = await fetch("/api/gemini", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      signal: controller.signal
+    });
+
+    clearTimeout(timer);
+
+    if (!resposta.ok) {
+      // Erro 429 = cota esgotada — não adianta tentar de novo
+      if (resposta.status === 429) {
+        console.warn("Gemini: cota esgotada — usando análise local");
+        return null;
+      }
+      throw new Error(`HTTP ${resposta.status}`);
+    }
+
+    const dados = await resposta.json();
+    return dados.diagnostico || null;
+
+  } catch (e) {
+    if (e.name === "AbortError") {
+      console.warn("Gemini: timeout — usando análise local");
+      return null;
+    }
+    // Tenta de novo se não for a última tentativa
+    if (tentativa < MAX_TENTATIVAS) {
+      console.warn(`Gemini: tentativa ${tentativa} falhou, tentando novamente...`);
+      await new Promise(r => setTimeout(r, 1500));
+      return chamarGemini(payload, tentativa + 1);
+    }
+    console.warn("Gemini indisponível:", e);
+    return null;
+  }
 }
 
 // ════════════════════════════════
