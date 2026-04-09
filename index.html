@@ -669,7 +669,7 @@
 <!-- ══════════════════════════════
      TELA 3 — SINTOMAS MANUAIS
 ══════════════════════════════ -->
-<div class="tela" id="t-sintomas" style="background:var(--fundo);padding:80px 20px 120px;align-items:center;">
+<div class="tela" id="t-sintomas" style="background:var(--fundo);padding:80px 20px 120px;align-items:center;overflow-y:auto;-webkit-overflow-scrolling:touch;">
   <div style="width:100%;max-width:480px;display:flex;flex-direction:column;gap:12px;z-index:10;position:relative;">
 
     <div style="text-align:center;">
@@ -692,8 +692,9 @@
       .check-item {
         display: flex; align-items: center; gap: 10px;
         font-size: 14px; cursor: pointer; color: rgba(255,255,255,.8);
+        position: relative; z-index: 20; pointer-events: all;
       }
-      .check-item input { width: 16px; height: 16px; accent-color: var(--azul); }
+      .check-item input { width: 16px; height: 16px; accent-color: var(--azul); cursor: pointer; position: relative; z-index: 21; }
     </style>
 
     <textarea id="descricaoUsuario" rows="3"
