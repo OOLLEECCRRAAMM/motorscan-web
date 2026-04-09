@@ -1312,6 +1312,12 @@ async function analisarAudioGravado() {
   } catch (e) {
     console.warn("Gemini indisponível, usando análise local:", e);
   }
+
+  // Completa a barra e exibe resultado
+  clearInterval(window._procInterval);
+  document.getElementById("procBarra").style.width = "100%";
+  document.getElementById("procStatus").textContent = "Relatório gerado!";
+  setTimeout(exibirResultado, 400);
 }
 
 // ════════════════════════════════
@@ -1388,23 +1394,33 @@ async function coletarSintomas() {
   } catch (e) {
     console.warn("Gemini indisponível, usando análise local:", e);
   }
+
+  // Completa a barra e exibe resultado
+  clearInterval(window._procInterval);
+  document.getElementById("procBarra").style.width = "100%";
+  document.getElementById("procStatus").textContent = "Relatório gerado!";
+  setTimeout(exibirResultado, 400);
 }
 
 // ════════════════════════════════
 // PROCESSANDO
 // ════════════════════════════════
-const procMsgs=["Cruzando com base técnica...","Identificando padrões...","Calculando probabilidades...","Gerando relatório..."];
+const procMsgs=["Consultando Gemini AI...","Analisando padrões...","Calculando probabilidades...","Gerando relatório..."];
 
 function irParaProcessando() {
   irPara("t-proc");
   document.getElementById("procBarra").style.width="0%";
-  let p=0;
-  const iv=setInterval(()=>{
-    p+=3;
-    document.getElementById("procBarra").style.width=p+"%";
-    document.getElementById("procStatus").textContent=procMsgs[Math.min(Math.floor(p/30),procMsgs.length-1)];
-    if(p>=100){clearInterval(iv);setTimeout(exibirResultado,300);}
-  },40);
+  document.getElementById("procStatus").textContent = procMsgs[0];
+  let p = 0;
+  // Barra anima até 90% e aguarda o Gemini
+  const iv = setInterval(()=>{
+    if (p < 90) {
+      p += 2;
+      document.getElementById("procBarra").style.width = p + "%";
+      document.getElementById("procStatus").textContent = procMsgs[Math.min(Math.floor(p/30), procMsgs.length-1)];
+    }
+  }, 60);
+  window._procInterval = iv;
 }
 
 // ════════════════════════════════
