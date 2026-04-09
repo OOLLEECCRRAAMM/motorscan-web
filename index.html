@@ -91,6 +91,12 @@
       position: fixed; inset: 0;
       width: 100%; height: 100%;
       touch-action: none; z-index: 1;
+      transition: opacity 0.3s;
+    }
+    #canvas3d.oculto {
+      display: none !important;
+      pointer-events: none !important;
+      z-index: -1 !important;
     }
 
     /* ── SCANNER ── */
@@ -518,7 +524,7 @@
 <div class="vinheta"></div>
 
 <!-- Canvas 3D (sempre visível no fundo da tela home) -->
-<canvas id="canvas3d"></canvas>
+<canvas id="canvas3d" class="oculto"></canvas>
 
 <!-- Scanner overlay -->
 <div class="scanner-overlay" id="scannerOverlay"><div class="scanner-linha"></div></div>
@@ -881,7 +887,14 @@ function irPara(tela) {
   document.querySelectorAll(".nav-item").forEach(el => el.classList.remove("ativo"));
   if (navMap[tela]) document.getElementById(navMap[tela])?.classList.add("ativo");
 
-  if (tela === "t-home") inicializarCanvas3D();
+  if (tela === "t-home") {
+    inicializarCanvas3D();
+    document.getElementById("canvas3d").classList.remove("oculto");
+    document.getElementById("setas-nav").style.display = setasVisiveis ? "block" : "none";
+  } else {
+    document.getElementById("canvas3d").classList.add("oculto");
+    document.getElementById("setas-nav").style.display = "none";
+  }
   if (tela === "t-audio") inicializarCanvasAudio();
   if (tela === "t-prontuario") renderizarProntuario();
 }
@@ -1536,8 +1549,13 @@ function voarePara(peca) {
   }, 1200);
 }
 
-// Inicializa o 3D ao carregar
-window.addEventListener("load", () => setTimeout(inicializarCanvas3D, 1200));
+// Inicializa o 3D ao carregar — remove classe oculto da home
+window.addEventListener("load", () => {
+  setTimeout(() => {
+    document.getElementById("canvas3d").classList.remove("oculto");
+    inicializarCanvas3D();
+  }, 1200);
+});
 </script>
 </body>
 </html>
