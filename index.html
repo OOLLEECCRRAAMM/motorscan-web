@@ -1243,29 +1243,61 @@ function detectarTempoReal(fft) {
   if(!algum) lista.innerHTML=`<div style="font-size:11px;color:rgba(255,255,255,.2);text-align:center;padding:8px;">Aguardando sinal...</div>`;
 }
 
-function analisarAudioGravado() {
+async function analisarAudioGravado() {
   if (!dadosFFT) return;
-  const sr=audioCtx?.sampleRate||44100, bs=sr/2048;
-  const res=[];
-  for(const [k,f] of Object.entries(BRAIN)){
-    const bMin=Math.floor(f.fMin/bs),bMax=Math.ceil(f.fMax/bs);
-    let s=0,c=0;
-    for(let i=bMin;i<=Math.min(bMax,dadosFFT.length-1);i++){s+=dadosFFT[i];c++;}
-    const med=c>0?s/c:0, conf=Math.min(100,Math.round((med/255)*100));
-    if(med>=f.lim*.5) res.push({...f,key:k,med,conf});
+
+  // Prepara resumo das frequências para enviar ao Gemini
+  const sr = audioCtx?.sampleRate || 44100;
+  const bs = sr / 2048;
+  let resumoFreq = "Frequências com maior amplitude detectadas:\n";
+
+  for (const [, f] of Object.entries(BRAIN)) {
+    const bMin = Math.floor(f.fMin / bs);
+    const bMax = Math.ceil(f.fMax / bs);
+    let soma = 0, count = 0;
+    for (let i = bMin; i <= Math.min(bMax, dadosFFT.length - 1); i++) {
+      soma += dadosFFT[i]; count++;
+    }
+    const media = count > 0 ? soma / count : 0;
+    const pct = Math.round((media / 255) * 100);
+    if (pct > 10) resumoFreq += `- ${f.nome} (${f.fMin}–${f.fMax} Hz): intensidade ${pct}%\n`;
   }
-  res.sort((a,b)=>b.med-a.med);
-  origemAudio=true;
-  if(!res.length){
-    diagAtual={problema:"Nenhuma anomalia detectada",causa:"Padrões acústicos dentro dos parâmetros normais.",status:"estável",rec:"Se o problema persistir, use o diagnóstico por sintomas.",conf:0,base:`Gravação ${segsGrav}s`};
-    window._hipoteses=[];
-  } else {
-    const p=res[0];
-    diagAtual={problema:p.nome,causa:p.msg,status:p.status,rec:p.rec,conf:p.conf,base:`${p.fMin}–${p.fMax} Hz — Gravação ${segsGrav}s`};
-    window._hipoteses=res.slice(1,3);
-  }
-  dadosAnalise={sintomas:["análise_acústica"],descricao:`Gravação de ${segsGrav}s`};
+
+  origemAudio = true;
+  dadosAnalise = { sintomas: ["análise_acústica"], descricao: `Gravação de ${segsGrav}s` };
   irParaProcessando();
+
+  // Chama o Gemini API via backend seguro
+  try {
+    const resposta = await fetch("/api/gemini", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        dadosFrequencia: resumoFreq,
+        sintomas: [],
+        descricao: `Análise acústica de ${segsGrav} segundos de gravação do motor`
+      })
+    });
+
+    const dados = await resposta.json();
+    if (dados.diagnostico) {
+      const d = dados.diagnostico;
+      diagAtual = {
+        problema: d.problema,
+        causa: d.causa,
+        status: d.status,
+        rec: d.recomendacao,
+        conf: d.confianca,
+        base: `Análise acústica IA — ${segsGrav}s de gravação`,
+        origemIA: true
+      };
+      window._hipoteses = (d.hipoteses || []).map(h => ({
+        causa: h.causa, conf: h.confianca
+      }));
+    }
+  } catch (e) {
+    console.warn("Gemini indisponível, usando análise local:", e);
+  }
 }
 
 // ════════════════════════════════
@@ -1283,7 +1315,7 @@ const diagSintomas = [
 
 const pesos={fumaca:3,barulho_freio:3,perda_potencia:2,vibracao:2,luz_painel:2,dificuldade_partida:2,consumo_alto:1,chiado_motor:1};
 
-function coletarSintomas() {
+async function coletarSintomas() {
   const marcados=[...document.querySelectorAll('#t-sintomas input[type="checkbox"]:checked')];
   if(!marcados.length){alert("Selecione pelo menos um sintoma.");return;}
   const sintomas=marcados.map(cb=>cb.value);
@@ -1291,8 +1323,9 @@ function coletarSintomas() {
   dadosAnalise={sintomas,descricao};
   origemAudio=false;
 
+  // Diagnóstico local como fallback
   const res=diagSintomas.map(d=>{
-    let pt=0,conf=[],sConf=[];
+    let pt=0,sConf=[];
     d.sinRel.forEach(s=>{if(sintomas.includes(s)){pt+=pesos[s]||1;sConf.push(s);}});
     d.combFort?.forEach(c=>{if(c.every(s=>sintomas.includes(s)))pt+=2;});
     let confianca=pt<=1?40:pt===2?60:pt===3?75:pt===4?85:95;
@@ -1310,6 +1343,37 @@ function coletarSintomas() {
   document.querySelectorAll('#t-sintomas input[type="checkbox"]').forEach(cb=>cb.checked=false);
   document.getElementById("descricaoUsuario").value="";
   irParaProcessando();
+
+  // Chama o Gemini API via backend seguro
+  try {
+    const resposta = await fetch("/api/gemini", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sintomas: sintomas.map(s => nomesLegiveis[s] || s),
+        descricao: descricao || ""
+      })
+    });
+
+    const dados = await resposta.json();
+    if (dados.diagnostico) {
+      const d = dados.diagnostico;
+      diagAtual = {
+        problema: d.problema,
+        causa: d.causa,
+        status: d.status,
+        rec: d.recomendacao,
+        conf: d.confianca,
+        base: sintomas.map(s=>nomesLegiveis[s]||s).join(", "),
+        origemIA: true
+      };
+      window._hipoteses = (d.hipoteses || []).map(h => ({
+        causa: h.causa, conf: h.confianca
+      }));
+    }
+  } catch (e) {
+    console.warn("Gemini indisponível, usando análise local:", e);
+  }
 }
 
 // ════════════════════════════════
@@ -1342,8 +1406,8 @@ function estiloStatus(s){
 function exibirResultado() {
   const d=diagAtual;
   document.getElementById("origemBadge").innerHTML=origemAudio
-    ?`<span style="background:#0c1a3a;color:#93c5fd;padding:3px 12px;border-radius:999px;font-size:10px;font-weight:700;letter-spacing:2px;">🎙️ ANÁLISE ACÚSTICA</span>`
-    :`<span style="background:#052e16;color:#86efac;padding:3px 12px;border-radius:999px;font-size:10px;font-weight:700;letter-spacing:2px;">📋 ANÁLISE POR SINTOMAS</span>`;
+    ?`<span style="background:#0c1a3a;color:#93c5fd;padding:3px 12px;border-radius:999px;font-size:10px;font-weight:700;letter-spacing:2px;">${diagAtual.origemIA ? '🤖 GEMINI AI — ANÁLISE ACÚSTICA' : '🎙️ ANÁLISE ACÚSTICA LOCAL'}</span>`
+    :`<span style="background:#052e16;color:#86efac;padding:3px 12px;border-radius:999px;font-size:10px;font-weight:700;letter-spacing:2px;">${diagAtual.origemIA ? '🤖 GEMINI AI — SINTOMAS' : '📋 ANÁLISE LOCAL — SINTOMAS'}</span>`;
   document.getElementById("rCausa").textContent=d.causa||d.problema;
   const sEl=document.getElementById("rStatus");
   sEl.textContent=d.status;
