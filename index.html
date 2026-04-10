@@ -1,144 +1,1944 @@
-// api/gemini.js
-// Função serverless do Vercel — ponte segura entre o app e o Gemini API
-// A chave fica guardada nas variáveis de ambiente do Vercel — nunca exposta ao navegador
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
+  <title>MotorScan AI — Diagnóstico Automotivo</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;400;600;700&family=Share+Tech+Mono&display=swap');
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
-export default async function handler(req, res) {
+    :root {
+      --azul:    #00d4ff;
+      --verde:   #00ff9d;
+      --laranja: #ff6b35;
+      --amarelo: #fcd34d;
+      --vermelho:#ef4444;
+      --fundo:   #020810;
+      --painel:  rgba(0,20,40,0.9);
+    }
 
-  if (req.method === "OPTIONS") {
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-    return res.status(200).end();
+    html, body {
+      width: 100%; height: 100%;
+      background: var(--fundo);
+      color: #fff;
+      font-family: 'Rajdhani', sans-serif;
+      overflow: hidden;
+    }
+
+    /* ── TELAS ── */
+    .tela {
+      position: fixed;
+      inset: 0;
+      display: none;
+      flex-direction: column;
+      overflow-y: auto;
+    }
+    .tela.ativa { display: flex; animation: fadeIn 0.4s ease; }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ── GRADE DE FUNDO ── */
+    .grade-fundo {
+      position: fixed; inset: 0;
+      background-image:
+        linear-gradient(rgba(0,212,255,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,212,255,0.03) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none; z-index: 0;
+    }
+
+    .vinheta {
+      position: fixed; inset: 0;
+      background: radial-gradient(ellipse at center, transparent 30%, #020810 100%);
+      pointer-events: none; z-index: 0;
+    }
+
+    /* ── HEADER ── */
+    .header {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 100;
+      padding: 14px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: linear-gradient(180deg, rgba(2,8,16,0.95) 0%, transparent 100%);
+      border-bottom: 1px solid rgba(0,212,255,0.1);
+    }
+
+    .logo {
+      font-size: 18px; font-weight: 700;
+      letter-spacing: 3px; color: var(--azul);
+      text-transform: uppercase;
+    }
+    .logo span { color: var(--verde); }
+
+    .status-pill {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 9px; color: var(--verde);
+      border: 1px solid var(--verde);
+      padding: 3px 8px; border-radius: 2px;
+      letter-spacing: 2px;
+      animation: piscar 2s ease-in-out infinite;
+    }
+    @keyframes piscar { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+    /* ── CANVAS 3D ── */
+    #canvas3d {
+      position: fixed; inset: 0;
+      width: 100%; height: 100%;
+      touch-action: none; z-index: 1;
+      transition: opacity 0.3s;
+      pointer-events: none;
+    }
+    #canvas3d.interativo {
+      pointer-events: all;
+    }
+    #canvas3d.oculto {
+      display: none !important;
+      pointer-events: none !important;
+      z-index: -1 !important;
+    }
+
+    /* ── SCANNER ── */
+    .scanner-overlay {
+      position: fixed; inset: 0;
+      pointer-events: none; z-index: 5;
+      display: none;
+    }
+    .scanner-overlay.ativo { display: block; }
+    .scanner-linha {
+      position: absolute; left: 0; right: 0; height: 2px;
+      background: linear-gradient(90deg, transparent, var(--verde), transparent);
+      animation: escanear 2s linear infinite; opacity: 0.7;
+    }
+    @keyframes escanear { from{top:-2px} to{top:100%} }
+
+    /* ── LOADING ── */
+    #loading {
+      position: fixed; inset: 0; z-index: 999;
+      background: var(--fundo);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 20px;
+    }
+    .loading-logo {
+      font-size: 32px; font-weight: 700;
+      letter-spacing: 8px; color: var(--azul);
+    }
+    .loading-bar-bg {
+      width: 220px; height: 2px;
+      background: rgba(0,212,255,0.15); border-radius: 1px; overflow: hidden;
+    }
+    .loading-bar-fill {
+      height: 100%; background: var(--azul);
+      width: 0%; box-shadow: 0 0 10px var(--azul); transition: width .1s;
+    }
+    .loading-txt {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 10px; color: rgba(0,212,255,.5); letter-spacing: 3px;
+    }
+
+    /* ════════════════════════════
+       TELA 1 — GÊMEO DIGITAL 3D
+    ════════════════════════════ */
+    #t-home .painel-lateral {
+      position: fixed; left: 0; top: 60px; bottom: 80px;
+      width: 160px; z-index: 50;
+      display: flex; flex-direction: column;
+      justify-content: center; padding: 0 12px; gap: 6px;
+      pointer-events: none;
+    }
+
+    .painel-item {
+      background: var(--painel);
+      border: 1px solid rgba(0,212,255,0.15);
+      border-left: 2px solid var(--azul);
+      padding: 8px 10px; border-radius: 0 4px 4px 0;
+      cursor: pointer; pointer-events: all;
+      transition: all .2s; backdrop-filter: blur(10px);
+    }
+    .painel-item:hover, .painel-item.ativo {
+      background: rgba(0,212,255,.1);
+      border-left-color: var(--verde);
+    }
+    .painel-nome {
+      font-size: 11px; font-weight: 600;
+      letter-spacing: 1px; color: var(--azul);
+      text-transform: uppercase;
+    }
+    .painel-item.ativo .painel-nome { color: var(--verde); }
+    .painel-hz {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 9px; color: rgba(255,255,255,.35); margin-top: 1px;
+    }
+
+    .freq-display {
+      position: fixed; right: 14px; top: 50%;
+      transform: translateY(-50%);
+      z-index: 50; display: flex; flex-direction: column;
+      gap: 3px; align-items: flex-end;
+    }
+    .freq-linha {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 9px; color: rgba(0,212,255,.4); letter-spacing: 1px;
+    }
+    .freq-valor { color: var(--azul); font-size: 11px; }
+
+    .controles-home {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      z-index: 50; padding: 12px 16px 20px;
+      background: linear-gradient(0deg, rgba(2,8,16,.95) 0%, transparent 100%);
+      display: flex; align-items: center;
+      justify-content: center; gap: 8px; flex-wrap: wrap;
+    }
+
+    .btn-ctrl {
+      font-family: 'Rajdhani', sans-serif;
+      font-size: 11px; font-weight: 600;
+      letter-spacing: 2px; text-transform: uppercase;
+      padding: 9px 16px; border-radius: 2px;
+      cursor: pointer; transition: all .2s; border: 1px solid;
+    }
+    .btn-azul { background: rgba(0,212,255,.08); border-color: var(--azul); color: var(--azul); }
+    .btn-azul:hover { background: rgba(0,212,255,.2); box-shadow: 0 0 15px rgba(0,212,255,.3); }
+    .btn-verde { background: rgba(0,255,157,.08); border-color: var(--verde); color: var(--verde); }
+    .btn-verde:hover { background: rgba(0,255,157,.2); box-shadow: 0 0 15px rgba(0,255,157,.3); }
+    .btn-laranja { background: rgba(255,107,53,.08); border-color: var(--laranja); color: var(--laranja); }
+    .btn-laranja:hover { background: rgba(255,107,53,.2); }
+
+    /* ════════════════════════════
+       TELA 2 — ANÁLISE ACÚSTICA
+    ════════════════════════════ */
+    #t-audio {
+      background: var(--fundo);
+      padding: 80px 20px 120px;
+      align-items: center;
+    }
+
+    .audio-container {
+      width: 100%; max-width: 500px;
+      display: flex; flex-direction: column; gap: 16px;
+      z-index: 10; position: relative;
+    }
+
+    .secao-titulo {
+      font-size: 10px; font-weight: 600;
+      letter-spacing: 3px; color: rgba(0,212,255,.5);
+      text-transform: uppercase; margin-bottom: 4px;
+    }
+
+    #espectrograma {
+      width: 100%; height: 110px;
+      border-radius: 8px; background: #000;
+      border: 1px solid rgba(0,212,255,.2); display: block;
+    }
+    #canvas-freq {
+      width: 100%; height: 70px;
+      border-radius: 6px; background: #000;
+      border: 1px solid rgba(0,212,255,.1); display: block;
+    }
+
+    .audio-controls {
+      display: flex; align-items: center;
+      justify-content: space-between;
+    }
+
+    .btn-gravar {
+      width: 64px; height: 64px; border-radius: 50%;
+      border: 2px solid var(--vermelho);
+      background: transparent; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 24px; transition: all .2s;
+    }
+    .btn-gravar:hover { background: rgba(239,68,68,.15); }
+    .btn-gravar.gravando {
+      background: var(--vermelho);
+      animation: pulsar 1s ease-in-out infinite;
+    }
+    @keyframes pulsar {
+      0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,.4)}
+      50%{box-shadow:0 0 0 12px rgba(239,68,68,0)}
+    }
+
+    .nivel-audio { display: flex; gap: 3px; align-items: flex-end; height: 24px; }
+    .nivel-barra {
+      width: 4px; background: var(--verde);
+      border-radius: 2px; min-height: 3px; transition: height .08s;
+    }
+
+    .deteccoes-box {
+      background: rgba(0,10,20,.8);
+      border: 1px solid rgba(0,212,255,.15);
+      border-radius: 8px; padding: 12px;
+    }
+
+    .freq-card {
+      background: rgba(0,5,15,.8);
+      border: 1px solid rgba(0,212,255,.1);
+      border-radius: 6px; padding: 10px 12px;
+      display: flex; align-items: center; gap: 10px;
+      margin-bottom: 6px;
+    }
+    .freq-card:last-child { margin-bottom: 0; }
+    .freq-card.detectado { border-color: var(--vermelho); background: rgba(30,5,5,.8); }
+    .freq-card.moderado  { border-color: var(--amarelo); background: rgba(30,20,5,.8); }
+    .freq-nome { font-size: 12px; font-weight: 600; color: #e2e8f0; }
+    .freq-hz   { font-size: 10px; color: #475569; margin-top: 1px; }
+    .freq-pct  { font-size: 12px; font-weight: 700; color: #475569; margin-left: auto; }
+    .freq-pct.ativo    { color: var(--vermelho); }
+    .freq-pct.moderado { color: var(--amarelo); }
+
+    .btn-audio-analisar {
+      font-family: 'Rajdhani', sans-serif;
+      font-size: 13px; font-weight: 700;
+      letter-spacing: 3px; text-transform: uppercase;
+      padding: 14px; border-radius: 4px;
+      cursor: pointer; transition: all .2s;
+      border: 1px solid var(--verde);
+      background: rgba(0,255,157,.08); color: var(--verde);
+      width: 100%;
+    }
+    .btn-audio-analisar:hover { background: rgba(0,255,157,.2); }
+
+    /* ════════════════════════════
+       TELA 3 — PROCESSANDO
+    ════════════════════════════ */
+    #t-proc {
+      align-items: center; justify-content: center;
+      background: var(--fundo);
+    }
+    .proc-box {
+      text-align: center; z-index: 10;
+      display: flex; flex-direction: column;
+      align-items: center; gap: 20px;
+    }
+    .proc-icone { font-size: 56px; animation: girar 2s linear infinite; }
+    @keyframes girar { to { transform: rotate(360deg); } }
+    .proc-titulo { font-size: 18px; font-weight: 600; letter-spacing: 2px; color: var(--azul); }
+    .proc-barra-bg {
+      width: 240px; height: 3px;
+      background: rgba(0,212,255,.1); border-radius: 2px; overflow: hidden;
+    }
+    .proc-barra-fill {
+      height: 100%; background: var(--azul);
+      width: 0%; box-shadow: 0 0 8px var(--azul); transition: width .1s;
+    }
+    .proc-status {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 10px; color: rgba(0,212,255,.6); letter-spacing: 2px;
+    }
+
+    /* ════════════════════════════
+       TELA 4 — RESULTADO
+    ════════════════════════════ */
+    #t-resultado {
+      background: var(--fundo);
+      padding: 80px 20px 100px;
+      align-items: center;
+    }
+
+    .resultado-container {
+      width: 100%; max-width: 480px;
+      display: flex; flex-direction: column; gap: 12px;
+      z-index: 10; position: relative;
+    }
+
+    .resultado-titulo {
+      font-size: 18px; font-weight: 700;
+      letter-spacing: 2px; color: #fff; text-align: center;
+    }
+
+    .resultado-subtitulo {
+      font-size: 11px; color: rgba(255,255,255,.35);
+      letter-spacing: 2px; text-align: center; margin-bottom: 4px;
+    }
+
+    .card-resultado {
+      background: rgba(0,10,20,.9);
+      border: 1px solid rgba(0,212,255,.15);
+      border-radius: 8px; padding: 14px 16px;
+    }
+
+    .card-label {
+      font-size: 10px; color: rgba(255,255,255,.35);
+      letter-spacing: 2px; text-transform: uppercase; margin-bottom: 6px;
+    }
+
+    .card-valor {
+      font-size: 15px; font-weight: 600; color: var(--amarelo);
+    }
+
+    .aviso-box {
+      background: rgba(0,5,10,.8);
+      border: 1px solid rgba(0,212,255,.08);
+      border-radius: 6px; padding: 10px 14px;
+      font-size: 11px; color: rgba(255,255,255,.3);
+      text-align: center; letter-spacing: 1px;
+    }
+
+    .btn-resultado {
+      font-family: 'Rajdhani', sans-serif;
+      font-size: 12px; font-weight: 700;
+      letter-spacing: 2px; text-transform: uppercase;
+      padding: 12px; border-radius: 4px;
+      cursor: pointer; transition: all .2s; border: 1px solid;
+      width: 100%;
+    }
+
+    /* ════════════════════════════
+       TELA 5 — PRONTUÁRIO
+    ════════════════════════════ */
+    #t-prontuario {
+      background: var(--fundo);
+      padding: 80px 20px 100px;
+      align-items: center;
+    }
+
+    .prontuario-container {
+      width: 100%; max-width: 480px;
+      display: flex; flex-direction: column; gap: 12px;
+      z-index: 10; position: relative;
+    }
+
+    .registro-card {
+      background: rgba(0,10,20,.9);
+      border: 1px solid rgba(0,212,255,.12);
+      border-radius: 8px; padding: 14px 16px;
+      border-left: 3px solid var(--azul);
+    }
+    .registro-card.urgente { border-left-color: var(--vermelho); }
+    .registro-card.moderado { border-left-color: var(--amarelo); }
+    .registro-card.atencao { border-left-color: var(--azul); }
+
+    /* ── SETAS STREET VIEW ── */
+    .seta-nav {
+      position: fixed;
+      z-index: 15;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      cursor: pointer;
+      transition: all .2s;
+      pointer-events: all;
+    }
+    .seta-nav:hover .seta-circulo { transform: scale(1.15); border-color: var(--verde); }
+    .seta-nav:hover .seta-label { color: var(--verde); }
+
+    .seta-circulo {
+      width: 44px; height: 44px;
+      border-radius: 50%;
+      border: 2px solid var(--azul);
+      background: rgba(0,20,40,.85);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px;
+      backdrop-filter: blur(8px);
+      transition: all .2s;
+      box-shadow: 0 0 12px rgba(0,212,255,.3);
+      animation: pulsarSeta 2s ease-in-out infinite;
+    }
+    @keyframes pulsarSeta {
+      0%,100%{ box-shadow: 0 0 8px rgba(0,212,255,.3); }
+      50%{ box-shadow: 0 0 20px rgba(0,212,255,.6); }
+    }
+    .seta-label {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 9px; color: var(--azul);
+      letter-spacing: 1px; text-align: center;
+      transition: color .2s;
+    }
+
+    /* Linha conectora das setas */
+    .seta-linha {
+      position: fixed; z-index: 14;
+      pointer-events: none;
+      border-top: 1px dashed rgba(0,212,255,.2);
+    }
+    .nav-bottom {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      z-index: 200;
+      background: rgba(2,8,16,.97);
+      border-top: 1px solid rgba(0,212,255,.1);
+      display: flex; align-items: center;
+    }
+
+    .nav-item {
+      flex: 1; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      padding: 10px 4px;
+      cursor: pointer; transition: all .2s;
+      border: none; background: transparent;
+    }
+
+    .nav-item:hover .nav-icone { transform: scale(1.1); }
+    .nav-item.ativo .nav-label { color: var(--verde); }
+    .nav-item.ativo .nav-icone { filter: drop-shadow(0 0 4px var(--verde)); }
+
+    .nav-icone { font-size: 20px; transition: transform .2s; }
+    .nav-label {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 8px; color: rgba(255,255,255,.3);
+      letter-spacing: 1px; margin-top: 2px;
+    }
+
+    /* ── MODAL DE PEÇA ── */
+    .modal-overlay {
+      position: fixed; inset: 0; z-index: 300;
+      background: rgba(0,0,0,.7); display: none;
+      align-items: center; justify-content: center;
+      backdrop-filter: blur(4px);
+    }
+    .modal-overlay.aberto { display: flex; }
+    .modal-box {
+      background: rgba(2,12,24,.98);
+      border: 1px solid var(--azul);
+      border-radius: 8px; padding: 24px;
+      width: 300px; max-width: 90vw;
+      animation: entrar .3s ease;
+    }
+    @keyframes entrar {
+      from{opacity:0;transform:scale(.95)}
+      to{opacity:1;transform:scale(1)}
+    }
+    .modal-titulo { font-size: 14px; font-weight: 700; color: var(--azul); letter-spacing: 3px; margin-bottom: 12px; }
+    .modal-info   { font-size: 13px; color: rgba(255,255,255,.7); line-height: 1.7; margin-bottom: 16px; }
+    .modal-fechar {
+      font-family: 'Rajdhani', sans-serif; font-size: 11px;
+      letter-spacing: 2px; color: var(--verde);
+      background: transparent; border: 1px solid var(--verde);
+      padding: 8px; cursor: pointer; border-radius: 2px; width: 100%;
+    }
+  </style>
+</head>
+<body>
+
+<!-- Loading -->
+<div id="loading">
+  <div class="loading-logo">MotorScan</div>
+  <div style="font-size:11px;color:rgba(0,212,255,.4);letter-spacing:2px;margin-bottom:4px;">GÊMEO DIGITAL AI</div>
+  <div class="loading-bar-bg"><div class="loading-bar-fill" id="loadBar"></div></div>
+  <div class="loading-txt" id="loadTxt">INICIALIZANDO...</div>
+</div>
+
+<!-- Fundo -->
+<div class="grade-fundo"></div>
+<div class="vinheta"></div>
+
+<!-- Canvas 3D (sempre visível no fundo da tela home) -->
+<canvas id="canvas3d" class="oculto"></canvas>
+
+<!-- Scanner overlay -->
+<div class="scanner-overlay" id="scannerOverlay"><div class="scanner-linha"></div></div>
+
+<!-- Header -->
+<div class="header">
+  <div class="logo">Motor<span>Scan</span> AI</div>
+  <div class="status-pill" id="statusPill">SISTEMA ATIVO</div>
+</div>
+
+<!-- Setas de navegação estilo Street View -->
+<div id="setas-nav" style="display:none;">
+  <div class="seta-nav" style="top:35%;left:50%;transform:translateX(-50%);" onclick="voarePara('motor')">
+    <div class="seta-circulo">⬆️</div><div class="seta-label">MOTOR</div>
+  </div>
+  <div class="seta-nav" style="top:50%;right:180px;transform:translateY(-50%);" onclick="voarePara('correia')">
+    <div class="seta-circulo">➡️</div><div class="seta-label">CORREIA</div>
+  </div>
+  <div class="seta-nav" style="bottom:120px;left:35%;transform:translateX(-50%);" onclick="voarePara('freios')">
+    <div class="seta-circulo">⬇️</div><div class="seta-label">FREIOS</div>
+  </div>
+  <div class="seta-nav" style="top:60%;left:180px;transform:translateY(-50%);" onclick="voarePara('suspensao')">
+    <div class="seta-circulo">⬅️</div><div class="seta-label">SUSPENSÃO</div>
+  </div>
+  <div class="seta-nav" style="bottom:120px;right:180px;" onclick="voarePara('escape')">
+    <div class="seta-circulo">↙️</div><div class="seta-label">ESCAPE</div>
+  </div>
+</div>
+
+<!-- Botão navegação -->
+<div style="position:fixed;top:60px;right:16px;z-index:15;">
+  <button class="btn-ctrl btn-azul" style="font-size:10px;padding:6px 12px;"
+    onclick="alternarSetas()" id="btnSetas">🧭 NAVEGAÇÃO</button>
+</div>
+
+<!-- ══════════════════════════════
+     TELA 1 — GÊMEO DIGITAL
+══════════════════════════════ -->
+<div class="tela ativa" id="t-home">
+
+  <!-- Área de interação do carro 3D — centro da tela -->
+  <div id="area3d" style="position:fixed;left:160px;right:160px;top:60px;bottom:80px;z-index:2;cursor:grab;"
+    onmousedown="iniciarArrastar(event)"
+    ontouchstart="iniciarArrastarTouch(event)">
+  </div>
+
+  <!-- Painel lateral de componentes -->
+  <div class="painel-lateral">
+    <div class="painel-item ativo" onclick="focarPeca('motor')" id="btn-motor">
+      <div class="painel-nome">Motor</div>
+      <div class="painel-hz">80–300 Hz</div>
+    </div>
+    <div class="painel-item" onclick="focarPeca('correia')" id="btn-correia">
+      <div class="painel-nome">Correia</div>
+      <div class="painel-hz">1k–4k Hz</div>
+    </div>
+    <div class="painel-item" onclick="focarPeca('suspensao')" id="btn-suspensao">
+      <div class="painel-nome">Suspensão</div>
+      <div class="painel-hz">40–120 Hz</div>
+    </div>
+    <div class="painel-item" onclick="focarPeca('freios')" id="btn-freios">
+      <div class="painel-nome">Freios</div>
+      <div class="painel-hz">2k–6k Hz</div>
+    </div>
+    <div class="painel-item" onclick="focarPeca('escape')" id="btn-escape">
+      <div class="painel-nome">Escape</div>
+      <div class="painel-hz">80–300 Hz</div>
+    </div>
+
+    <!-- Painel do veículo cadastrado -->
+    <div class="painel-item" onclick="irPara('t-veiculo')" style="margin-top:8px;border-left-color:var(--verde);">
+      <div id="painelVeiculo">
+        <div class="painel-nome" style="color:var(--verde);">+ MEU CARRO</div>
+        <div class="painel-hz">Toque para cadastrar</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Display de frequência -->
+  <div class="freq-display">
+    <div class="freq-linha">COMPONENTE</div>
+    <div class="freq-linha freq-valor" id="freqComp">MOTOR</div>
+    <div class="freq-linha" style="margin-top:6px">FAIXA</div>
+    <div class="freq-linha freq-valor" id="freqValor">80–300 Hz</div>
+    <div class="freq-linha" style="margin-top:6px">STATUS</div>
+    <div class="freq-linha freq-valor" id="freqStatus" style="color:var(--verde)">NORMAL</div>
+  </div>
+
+  <!-- Controles do 3D -->
+  <div class="controles-home">
+    <button class="btn-ctrl btn-azul" onclick="alternarVista()">🔄 GIRAR</button>
+    <button class="btn-ctrl btn-verde" onclick="alternarRaioX()">☢️ RAIO-X</button>
+    <button class="btn-ctrl btn-laranja" onclick="irPara('t-audio')">🎙️ ESCANEAR</button>
+    <button class="btn-ctrl btn-azul" onclick="resetarCamera()">⟳ RESET</button>
+  </div>
+</div>
+
+<!-- ══════════════════════════════
+     TELA 2 — ANÁLISE ACÚSTICA
+══════════════════════════════ -->
+<div class="tela" id="t-audio">
+  <div class="audio-container" style="z-index:10;position:relative;margin-top:80px;padding:0 0 120px;">
+
+    <div>
+      <div class="secao-titulo">Espectrograma — frequências em tempo real</div>
+      <canvas id="espectrograma"></canvas>
+    </div>
+
+    <div>
+      <div class="secao-titulo">Amplitude por frequência</div>
+      <canvas id="canvas-freq"></canvas>
+    </div>
+
+    <div class="audio-controls">
+      <div>
+        <div id="statusMic" style="font-size:13px;color:rgba(255,255,255,.5);">Pronto para gravar</div>
+        <div id="timerGrav" style="font-family:'Share Tech Mono',monospace;font-size:10px;color:rgba(255,255,255,.25);margin-top:2px;">00:00</div>
+      </div>
+      <div class="nivel-audio" id="nivelAudio">
+        <div class="nivel-barra" id="b1"></div>
+        <div class="nivel-barra" id="b2"></div>
+        <div class="nivel-barra" id="b3"></div>
+        <div class="nivel-barra" id="b4"></div>
+        <div class="nivel-barra" id="b5"></div>
+        <div class="nivel-barra" id="b6"></div>
+        <div class="nivel-barra" id="b7"></div>
+        <div class="nivel-barra" id="b8"></div>
+      </div>
+      <button id="btnGravar" class="btn-gravar" onclick="alternarGravacao()">
+        <span id="iconeGrav">🎙️</span>
+      </button>
+    </div>
+
+    <div class="deteccoes-box" id="deteccoesBox">
+      <div class="secao-titulo">Padrões detectados</div>
+      <div id="listaDeteccoes">
+        <div style="font-size:12px;color:rgba(255,255,255,.2);text-align:center;padding:8px;">
+          Aguardando sinal de áudio...
+        </div>
+      </div>
+    </div>
+
+    <button class="btn-audio-analisar" id="btnAnalisarAudio"
+      style="display:none;" onclick="analisarAudioGravado()">
+      ANALISAR GRAVAÇÃO
+    </button>
+
+    <div style="display:flex;align-items:center;gap:10px;margin:4px 0;">
+      <div style="flex:1;border-top:1px solid rgba(255,255,255,.08);"></div>
+      <div style="font-size:10px;color:rgba(255,255,255,.2);letter-spacing:2px;">OU</div>
+      <div style="flex:1;border-top:1px solid rgba(255,255,255,.08);"></div>
+    </div>
+
+    <button class="btn-ctrl btn-azul" style="width:100%;padding:12px;"
+      onclick="irPara('t-sintomas')">
+      INFORMAR SINTOMAS MANUALMENTE
+    </button>
+
+  </div>
+</div>
+
+<!-- ══════════════════════════════
+     TELA 3 — SINTOMAS MANUAIS
+══════════════════════════════ -->
+<div class="tela" id="t-sintomas" style="background:var(--fundo);padding:80px 20px 120px;align-items:center;overflow-y:auto;-webkit-overflow-scrolling:touch;">
+  <div style="width:100%;max-width:480px;display:flex;flex-direction:column;gap:12px;z-index:10;position:relative;">
+
+    <div style="text-align:center;">
+      <div style="font-size:18px;font-weight:700;letter-spacing:2px;">INFORMAR SINTOMAS</div>
+      <div style="font-size:11px;color:rgba(255,255,255,.3);letter-spacing:2px;margin-top:4px;">Selecione os sintomas do veículo</div>
+    </div>
+
+    <div style="background:rgba(0,10,20,.9);border:1px solid rgba(0,212,255,.15);border-radius:8px;padding:16px;display:flex;flex-direction:column;gap:12px;">
+      <label class="check-item"><input type="checkbox" value="dificuldade_partida"/> Dificuldade para ligar</label>
+      <label class="check-item"><input type="checkbox" value="perda_potencia"/> Perda de potência</label>
+      <label class="check-item"><input type="checkbox" value="luz_painel"/> Luz acesa no painel</label>
+      <label class="check-item"><input type="checkbox" value="barulho_freio"/> Barulho ao frear</label>
+      <label class="check-item"><input type="checkbox" value="vibracao"/> Vibração no carro</label>
+      <label class="check-item"><input type="checkbox" value="consumo_alto"/> Consumo elevado</label>
+      <label class="check-item"><input type="checkbox" value="fumaca"/> Fumaça no escapamento</label>
+      <label class="check-item"><input type="checkbox" value="chiado_motor"/> Chiado no motor</label>
+    </div>
+
+    <style>
+      .check-item {
+        display: flex; align-items: center; gap: 10px;
+        font-size: 14px; cursor: pointer; color: rgba(255,255,255,.8);
+        position: relative; z-index: 20; pointer-events: all;
+      }
+      .check-item input { width: 16px; height: 16px; accent-color: var(--azul); cursor: pointer; position: relative; z-index: 21; }
+    </style>
+
+    <textarea id="descricaoUsuario" rows="3"
+      placeholder="Detalhes adicionais (opcional)..."
+      style="background:rgba(0,5,15,.8);border:1px solid rgba(0,212,255,.15);border-radius:6px;padding:12px;color:#fff;font-size:13px;font-family:'Rajdhani',sans-serif;resize:none;outline:none;"></textarea>
+
+    <button class="btn-ctrl btn-verde" style="width:100%;padding:14px;"
+      onclick="coletarSintomas()">ANALISAR SINTOMAS</button>
+
+  </div>
+</div>
+
+<!-- ══════════════════════════════
+     TELA 4 — PROCESSANDO
+══════════════════════════════ -->
+<div class="tela" id="t-proc" style="background:var(--fundo);">
+  <div class="proc-box" style="z-index:10;">
+    <div class="proc-icone">⚙️</div>
+    <div class="proc-titulo">ANALISANDO PADRÕES</div>
+    <div class="proc-barra-bg"><div class="proc-barra-fill" id="procBarra"></div></div>
+    <div class="proc-status" id="procStatus">Iniciando análise...</div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════
+     TELA 5 — RESULTADO
+══════════════════════════════ -->
+<div class="tela" id="t-resultado" style="background:var(--fundo);padding:80px 20px 100px;align-items:center;overflow-y:auto;">
+  <div class="resultado-container">
+
+    <!-- Header do relatório -->
+    <div style="text-align:center;margin-bottom:4px;">
+      <div id="iconeUrgencia" style="font-size:48px;margin-bottom:8px;">🔍</div>
+      <div class="resultado-titulo">RELATÓRIO TÉCNICO</div>
+      <div class="resultado-subtitulo">USE ESTAS INFORMAÇÕES AO CONVERSAR COM SEU MECÂNICO</div>
+    </div>
+
+    <!-- Badge de origem -->
+    <div id="origemBadge" style="text-align:center;"></div>
+
+    <!-- Card principal — causa -->
+    <div class="card-resultado" id="cardPrincipal" style="border-left:3px solid var(--amarelo);">
+      <div class="card-label">Possível causa identificada</div>
+      <div class="card-valor" id="rCausa">---</div>
+    </div>
+
+    <!-- Card urgência + confiança -->
+    <div class="card-resultado" id="cardUrgencia" style="display:flex;justify-content:space-between;align-items:center;">
+      <div>
+        <div class="card-label">Nível de urgência</div>
+        <div id="rStatus" style="display:inline-block;margin-top:4px;">---</div>
+      </div>
+      <div style="text-align:right;">
+        <div class="card-label">Confiança da IA</div>
+        <div id="rConfianca" style="font-size:26px;font-weight:700;color:var(--verde);">---</div>
+        <!-- Barra de confiança -->
+        <div style="width:80px;height:4px;background:rgba(255,255,255,.1);border-radius:2px;margin-top:4px;overflow:hidden;">
+          <div id="barraConfianca" style="height:100%;background:var(--verde);border-radius:2px;width:0%;transition:width 1s ease;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Card recomendação -->
+    <div class="card-resultado" style="border-left:3px solid var(--azul);">
+      <div class="card-label">💡 O que pedir ao mecânico</div>
+      <div id="rRecomendacao" style="font-size:13px;color:rgba(255,255,255,.85);line-height:1.8;margin-top:4px;">---</div>
+    </div>
+
+    <!-- Card base da análise -->
+    <div class="card-resultado">
+      <div class="card-label">Base da análise</div>
+      <div id="rBase" style="font-size:13px;color:var(--azul);margin-top:2px;">---</div>
+    </div>
+
+    <!-- Card hipóteses -->
+    <div class="card-resultado">
+      <div class="card-label">Outras hipóteses</div>
+      <div id="rHipoteses" style="font-size:13px;color:rgba(255,255,255,.5);margin-top:2px;">---</div>
+    </div>
+
+    <!-- Aviso -->
+    <div class="aviso-box">⚠️ Orientação preliminar — confirme sempre com um profissional habilitado</div>
+
+    <!-- Botões de compartilhamento -->
+    <div style="display:flex;gap:10px;">
+      <button class="btn-resultado" style="flex:1;background:rgba(37,211,102,.1);border-color:#25d366;color:#25d366;font-size:13px;"
+        onclick="compartilharWhatsApp()">📲 WHATSAPP</button>
+      <button class="btn-resultado" style="flex:1;background:rgba(0,212,255,.08);border-color:var(--azul);color:var(--azul);font-size:13px;"
+        onclick="copiarResultado()" id="btnCopiar">📋 COPIAR</button>
+    </div>
+
+    <button class="btn-resultado btn-azul" style="border-color:var(--azul);color:var(--azul);"
+      onclick="irPara('t-home')">VER GÊMEO DIGITAL</button>
+
+    <button class="btn-resultado" style="background:transparent;border-color:rgba(255,255,255,.1);color:rgba(255,255,255,.3);"
+      onclick="irPara('t-audio')">NOVA ANÁLISE</button>
+
+  </div>
+</div>
+
+<!-- ══════════════════════════════
+     TELA 6 — CADASTRO DO VEÍCULO
+══════════════════════════════ -->
+<div class="tela" id="t-veiculo" style="background:var(--fundo);padding:80px 20px 120px;align-items:center;overflow-y:auto;">
+  <div style="width:100%;max-width:480px;display:flex;flex-direction:column;gap:14px;z-index:10;position:relative;">
+
+    <div style="text-align:center;">
+      <div style="font-size:32px;margin-bottom:8px;">🚗</div>
+      <div style="font-size:18px;font-weight:700;letter-spacing:2px;">MEU VEÍCULO</div>
+      <div style="font-size:11px;color:rgba(255,255,255,.3);letter-spacing:2px;margin-top:4px;">Personalize seu diagnóstico</div>
+    </div>
+
+    <!-- Marca -->
+    <div style="background:rgba(0,10,20,.9);border:1px solid rgba(0,212,255,.15);border-radius:8px;padding:14px;">
+      <div style="font-size:10px;color:rgba(255,255,255,.4);letter-spacing:2px;text-transform:uppercase;margin-bottom:8px;">Marca</div>
+      <select id="vMarca" onchange="atualizarModelos()"
+        style="width:100%;background:rgba(0,5,15,.8);border:1px solid rgba(0,212,255,.2);border-radius:6px;padding:10px;color:#fff;font-size:14px;font-family:'Rajdhani',sans-serif;outline:none;">
+        <option value="">Selecione a marca...</option>
+        <option value="Fiat">Fiat</option>
+        <option value="Chevrolet">Chevrolet</option>
+        <option value="Volkswagen">Volkswagen</option>
+        <option value="Hyundai">Hyundai</option>
+        <option value="Toyota">Toyota</option>
+        <option value="Renault">Renault</option>
+        <option value="Ford">Ford</option>
+        <option value="Honda">Honda</option>
+        <option value="Jeep">Jeep</option>
+        <option value="Nissan">Nissan</option>
+        <option value="Outro">Outro</option>
+      </select>
+    </div>
+
+    <!-- Modelo -->
+    <div style="background:rgba(0,10,20,.9);border:1px solid rgba(0,212,255,.15);border-radius:8px;padding:14px;">
+      <div style="font-size:10px;color:rgba(255,255,255,.4);letter-spacing:2px;text-transform:uppercase;margin-bottom:8px;">Modelo</div>
+      <select id="vModelo"
+        style="width:100%;background:rgba(0,5,15,.8);border:1px solid rgba(0,212,255,.2);border-radius:6px;padding:10px;color:#fff;font-size:14px;font-family:'Rajdhani',sans-serif;outline:none;">
+        <option value="">Selecione o modelo...</option>
+      </select>
+    </div>
+
+    <!-- Ano -->
+    <div style="background:rgba(0,10,20,.9);border:1px solid rgba(0,212,255,.15);border-radius:8px;padding:14px;">
+      <div style="font-size:10px;color:rgba(255,255,255,.4);letter-spacing:2px;text-transform:uppercase;margin-bottom:8px;">Ano</div>
+      <select id="vAno"
+        style="width:100%;background:rgba(0,5,15,.8);border:1px solid rgba(0,212,255,.2);border-radius:6px;padding:10px;color:#fff;font-size:14px;font-family:'Rajdhani',sans-serif;outline:none;">
+        <option value="">Selecione o ano...</option>
+      </select>
+    </div>
+
+    <!-- Cor -->
+    <div style="background:rgba(0,10,20,.9);border:1px solid rgba(0,212,255,.15);border-radius:8px;padding:14px;">
+      <div style="font-size:10px;color:rgba(255,255,255,.4);letter-spacing:2px;text-transform:uppercase;margin-bottom:8px;">Cor</div>
+      <select id="vCor"
+        style="width:100%;background:rgba(0,5,15,.8);border:1px solid rgba(0,212,255,.2);border-radius:6px;padding:10px;color:#fff;font-size:14px;font-family:'Rajdhani',sans-serif;outline:none;">
+        <option value="">Selecione a cor...</option>
+        <option value="Branco">Branco</option>
+        <option value="Preto">Preto</option>
+        <option value="Prata">Prata</option>
+        <option value="Cinza">Cinza</option>
+        <option value="Vermelho">Vermelho</option>
+        <option value="Azul">Azul</option>
+        <option value="Verde">Verde</option>
+        <option value="Amarelo">Amarelo</option>
+        <option value="Outra">Outra</option>
+      </select>
+    </div>
+
+    <button class="btn-ctrl btn-verde" style="width:100%;padding:14px;"
+      onclick="salvarVeiculo()">SALVAR MEU VEÍCULO</button>
+
+    <button style="width:100%;padding:12px;background:transparent;border:none;color:rgba(255,255,255,.3);font-family:'Rajdhani',sans-serif;font-size:12px;letter-spacing:2px;cursor:pointer;"
+      onclick="irPara('t-home')">AGORA NÃO</button>
+
+  </div>
+</div>
+
+<!-- ══════════════════════════════
+     TELA 7 — PRONTUÁRIO
+══════════════════════════════ -->
+<div class="tela" id="t-prontuario">
+  <div class="prontuario-container">
+    <div style="text-align:center;">
+      <div style="font-size:18px;font-weight:700;letter-spacing:2px;">PRONTUÁRIO</div>
+      <div style="font-size:11px;color:rgba(255,255,255,.3);letter-spacing:2px;margin-top:4px;">HISTÓRICO DO VEÍCULO</div>
+    </div>
+    <div id="resumoProntuario" style="background:rgba(0,10,20,.9);border:1px solid rgba(0,212,255,.15);border-radius:8px;padding:14px;"></div>
+    <div id="listaProntuario"></div>
+    <button class="btn-ctrl btn-laranja" style="width:100%;padding:12px;"
+      onclick="limparHistorico()">LIMPAR HISTÓRICO</button>
+  </div>
+</div>
+
+<!-- Modal de peça -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal-box">
+    <div class="modal-titulo" id="modalTitulo">---</div>
+    <div class="modal-info" id="modalInfo">---</div>
+    <button class="modal-fechar" onclick="fecharModal()">FECHAR</button>
+  </div>
+</div>
+
+<!-- Barra de navegação inferior -->
+<div class="nav-bottom">
+  <button class="nav-item ativo" id="nav-home" onclick="irPara('t-home')">
+    <span class="nav-icone">🚗</span>
+    <span class="nav-label">GÊMEO 3D</span>
+  </button>
+  <button class="nav-item" id="nav-audio" onclick="irPara('t-audio')">
+    <span class="nav-icone">🎙️</span>
+    <span class="nav-label">ÁUDIO</span>
+  </button>
+  <button class="nav-item" id="nav-sint" onclick="irPara('t-sintomas')">
+    <span class="nav-icone">📋</span>
+    <span class="nav-label">SINTOMAS</span>
+  </button>
+  <button class="nav-item" id="nav-veiculo" onclick="irPara('t-veiculo')">
+    <span class="nav-icone">🔧</span>
+    <span class="nav-label">MEU CARRO</span>
+  </button>
+  <button class="nav-item" id="nav-pront" onclick="irPara('t-prontuario')">
+    <span class="nav-icone">📁</span>
+    <span class="nav-label">PRONTUÁRIO</span>
+  </button>
+</div>
+  <button class="nav-item" id="nav-pront" onclick="irPara('t-prontuario')">
+    <span class="nav-icone">📁</span>
+    <span class="nav-label">PRONTUÁRIO</span>
+  </button>
+</div>
+
+<!-- Three.js -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+<script>
+// ════════════════════════════════
+// LOADING
+// ════════════════════════════════
+const loadMsgs = ["CARREGANDO MODELOS 3D...","CALIBRANDO SENSORES...","SINCRONIZANDO BASE DE DADOS...","PRONTO"];
+let lp = 0;
+const lIv = setInterval(() => {
+  lp += 2;
+  document.getElementById("loadBar").style.width = lp + "%";
+  document.getElementById("loadTxt").textContent = loadMsgs[Math.min(Math.floor(lp/28), loadMsgs.length-1)];
+  if (lp >= 100) {
+    clearInterval(lIv);
+    setTimeout(() => {
+      const el = document.getElementById("loading");
+      el.style.transition = "opacity .8s";
+      el.style.opacity = "0";
+      setTimeout(() => el.style.display = "none", 800);
+    }, 300);
+  }
+}, 30);
+
+// ════════════════════════════════
+// DADOS GLOBAIS
+// ════════════════════════════════
+let historico = JSON.parse(localStorage.getItem("motorscanHistorico")) || [];
+let telaAtiva = "t-home";
+let diagAtual = null;
+let dadosAnalise = { sintomas: [], descricao: "" };
+let origemAudio = false;
+
+const nomesLegiveis = {
+  dificuldade_partida:"Dificuldade para ligar", perda_potencia:"Perda de potência",
+  luz_painel:"Luz acesa no painel", barulho_freio:"Barulho ao frear",
+  vibracao:"Vibração no carro", consumo_alto:"Consumo elevado",
+  fumaca:"Fumaça no escapamento", chiado_motor:"Chiado no motor"
+};
+
+const BRAIN = {
+  batida_biela:      { nome:"Batida de biela",     fMin:20,   fMax:80,   lim:160, status:"urgente",  msg:"Impacto metálico no conjunto biela-virabrequim.",       rec:"Desligue o motor imediatamente. Risco de falha catastrófica.", icone:"💥" },
+  correia_alternador:{ nome:"Correia do alternador",fMin:1000, fMax:4000, lim:130, status:"atenção",  msg:"Assinatura de correia com tensão irregular.",            rec:"Verifique tensão e estado da correia antes de substituir.", icone:"⚠️" },
+  falha_ignicao:     { nome:"Falha na ignição",     fMin:80,   fMax:200,  lim:120, status:"moderado", msg:"Padrão rítmico irregular — possível misfire.",           rec:"Exija leitura do scanner para identificar o cilindro afetado.", icone:"⚡" },
+  vazamento_escape:  { nome:"Vazamento no escape",  fMin:80,   fMax:300,  lim:110, status:"atenção",  msg:"Perda de pressão no sistema de exaustão.",              rec:"Inspecione o coletor com motor frio. Procure fuligem nas juntas.", icone:"💨" },
+  rolamento:         { nome:"Rolamento desgastado", fMin:4000, fMax:8000, lim:100, status:"atenção",  msg:"Frequência de ressonância de componente rotativo alterada.",rec:"Identifique a origem — roda, alternador ou tensor.", icone:"🔄" },
+  pastilha_freio:    { nome:"Pastilha de freio",    fMin:2000, fMax:6000, lim:140, status:"urgente",  msg:"Indicador de desgaste em contato com disco.",            rec:"Leve ao mecânico imediatamente — peça para ver as pastilhas.", icone:"🛑" }
+};
+
+// ════════════════════════════════
+// NAVEGAÇÃO
+// ════════════════════════════════
+const navMap = { "t-home":"nav-home", "t-audio":"nav-audio", "t-sintomas":"nav-sint", "t-veiculo":"nav-veiculo", "t-prontuario":"nav-pront" };
+
+function irPara(tela) {
+  document.querySelectorAll(".tela").forEach(el => el.classList.remove("ativa"));
+  document.getElementById(tela).classList.add("ativa");
+  telaAtiva = tela;
+
+  document.querySelectorAll(".nav-item").forEach(el => el.classList.remove("ativo"));
+  if (navMap[tela]) document.getElementById(navMap[tela])?.classList.add("ativo");
+
+  if (tela === "t-home") {
+    inicializarCanvas3D();
+    document.getElementById("canvas3d").classList.remove("oculto");
+    document.getElementById("setas-nav").style.display = setasVisiveis ? "block" : "none";
+  } else {
+    document.getElementById("canvas3d").classList.add("oculto");
+    document.getElementById("setas-nav").style.display = "none";
+  }
+  if (tela === "t-audio") inicializarCanvasAudio();
+  if (tela === "t-prontuario") renderizarProntuario();
+}
+
+// ════════════════════════════════
+// THREE.JS — GÊMEO DIGITAL 3D
+// ════════════════════════════════
+let renderer3d, cena3d, camera3d, grupoCarro;
+let zoomCam = 6;
+let arrastando = false, uxAnt = 0, uyAnt = 0, distPinca = 0;
+let autoRot = true, modoRaioX = false;
+let camAlvo = new THREE.Vector3(0, 2, 6);
+let lookAlvo = new THREE.Vector3(0, 0, 0);
+let luzP1, luzP2, particulas3d;
+let animId3d = null;
+
+// Quaternion — rotação livre sem Gimbal Lock
+let quatCarro = new THREE.Quaternion();
+let autoRotQuat = new THREE.Quaternion();
+let eixoAutoRot = new THREE.Vector3(0, 1, 0);
+
+function inicializarCanvas3D() {
+  const canvas = document.getElementById("canvas3d");
+  if (renderer3d) { animar3d(); return; }
+
+  renderer3d = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+  renderer3d.setSize(window.innerWidth, window.innerHeight);
+  renderer3d.setPixelRatio(Math.min(devicePixelRatio, 2));
+  renderer3d.setClearColor(0x000000, 0);
+
+  cena3d = new THREE.Scene();
+  camera3d = new THREE.PerspectiveCamera(50, innerWidth/innerHeight, 0.1, 100);
+  camera3d.position.set(0, 2, 6);
+
+  cena3d.add(new THREE.AmbientLight(0x00d4ff, 0.3));
+  const luzDir = new THREE.DirectionalLight(0x00d4ff, 1);
+  luzDir.position.set(5,5,5); cena3d.add(luzDir);
+  luzP1 = new THREE.PointLight(0x00ff9d, 2, 10);
+  luzP1.position.set(-3,2,0); cena3d.add(luzP1);
+  luzP2 = new THREE.PointLight(0x00d4ff, 1.5, 10);
+  luzP2.position.set(3,-1,2); cena3d.add(luzP2);
+
+  grupoCarro = new THREE.Group();
+  cena3d.add(grupoCarro);
+  construirCarro();
+  grupoCarro.position.y = -0.3;
+  grupoCarro.rotation.y = 0.4;
+
+  cena3d.add(new THREE.GridHelper(20,30,0x001a2e,0x001020));
+
+  const gP = new THREE.BufferGeometry();
+  const pPos = new Float32Array(600);
+  for(let i=0;i<600;i++) pPos[i]=(Math.random()-.5)*30;
+  gP.setAttribute("position", new THREE.BufferAttribute(pPos,3));
+  particulas3d = new THREE.Points(gP, new THREE.PointsMaterial({color:0x00d4ff,size:.05,transparent:true,opacity:.35}));
+  cena3d.add(particulas3d);
+
+  // Ativa interação no canvas apenas quando o usuário toca nele diretamente
+  canvas.addEventListener("mousedown", e=>{
+    arrastando=true; uxAnt=e.clientX; uyAnt=e.clientY; autoRot=false;
+  });
+  canvas.addEventListener("mousemove", e=>{
+    if(!arrastando) return;
+    const dx = e.clientX - uxAnt;
+    const dy = e.clientY - uyAnt;
+    // Rotação no eixo Y (horizontal) — sempre no sentido do cursor
+    const qY = new THREE.Quaternion();
+    qY.setFromAxisAngle(new THREE.Vector3(0,1,0), dx * 0.01);
+    // Rotação no eixo X (vertical) — relativa à orientação atual
+    const qX = new THREE.Quaternion();
+    qX.setFromAxisAngle(new THREE.Vector3(1,0,0), dy * 0.01);
+    quatCarro.premultiply(qY).premultiply(qX);
+    uxAnt=e.clientX; uyAnt=e.clientY;
+  });
+  canvas.addEventListener("mouseup", ()=>arrastando=false);
+  canvas.addEventListener("mouseleave", ()=>arrastando=false);
+  canvas.addEventListener("wheel", e=>{ zoomCam+=e.deltaY*.01; zoomCam=Math.max(2.5,Math.min(12,zoomCam)); });
+  canvas.addEventListener("touchstart", e=>{
+    autoRot=false;
+    if(e.touches.length===1){uxAnt=e.touches[0].clientX;uyAnt=e.touches[0].clientY;}
+    else{distPinca=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);}
+  },{passive:true});
+  canvas.addEventListener("touchmove", e=>{
+    if(e.touches.length===1){
+      const dx=e.touches[0].clientX-uxAnt;
+      const dy=e.touches[0].clientY-uyAnt;
+      const qY=new THREE.Quaternion();
+      qY.setFromAxisAngle(new THREE.Vector3(0,1,0), dx*0.012);
+      const qX=new THREE.Quaternion();
+      qX.setFromAxisAngle(new THREE.Vector3(1,0,0), dy*0.012);
+      quatCarro.premultiply(qY).premultiply(qX);
+      uxAnt=e.touches[0].clientX; uyAnt=e.touches[0].clientY;
+    } else {
+      const nd=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
+      zoomCam-=(nd-distPinca)*.02; zoomCam=Math.max(2.5,Math.min(12,zoomCam)); distPinca=nd;
+    }
+  },{passive:true});
+
+  animar3d();
+}
+
+function construirCarro() {
+  const mS = new THREE.MeshPhongMaterial({color:0x001a2e,transparent:true,opacity:.7,shininess:100,specular:0x00d4ff});
+  const mW = new THREE.MeshBasicMaterial({color:0x00d4ff,wireframe:true,transparent:true,opacity:.12});
+  const mV = new THREE.MeshPhongMaterial({color:0x00d4ff,transparent:true,opacity:.1,shininess:200});
+  const mM = new THREE.MeshPhongMaterial({color:0x00ff9d,transparent:true,opacity:.6,shininess:150,emissive:0x002200});
+  const mC = new THREE.MeshPhongMaterial({color:0xffaa00,transparent:true,opacity:.8,shininess:80});
+  const mF = new THREE.MeshPhongMaterial({color:0xff4444,transparent:true,opacity:.7,shininess:120,emissive:0x220000});
+
+  const add = (geo,mat,x,y,z,rx=0,ry=0,rz=0) => {
+    const m = new THREE.Mesh(geo,mat);
+    m.position.set(x,y,z); m.rotation.set(rx,ry,rz);
+    grupoCarro.add(m); return m;
+  };
+
+  // Carroceria
+  const gC = new THREE.BoxGeometry(2.2,.6,4.5,3,2,6);
+  add(gC,mS,0,.5,0); add(gC,mW,0,.5,0);
+  const gCab = new THREE.BoxGeometry(1.8,.7,2.2,2,2,4);
+  add(gCab,mS,0,1.15,-.1); add(gCab,mW,0,1.15,-.1);
+  // Para-brisas
+  const gPB = new THREE.PlaneGeometry(1.7,.75);
+  add(gPB,mV,0,1.05,.97,-.35,0,0);
+  add(gPB,mV,0,1.05,-1.15,.35,0,0);
+  // Capô
+  const gCap = new THREE.BoxGeometry(2.1,.08,1.6,3,1,4);
+  add(gCap,mS,0,.84,1.5); add(gCap,mW,0,.84,1.5);
+  // Motor
+  add(new THREE.BoxGeometry(1.4,.5,1.1,3,2,3),mM,0,.45,1.5);
+  [.4,.13,-.13,-.4].forEach(x=>add(new THREE.CylinderGeometry(.12,.12,.4,8),mM,x,.72,1.2));
+  // Correia
+  add(new THREE.TorusGeometry(.35,.035,8,32),mC,.85,.65,1.2,0,Math.PI/2,0);
+  add(new THREE.CylinderGeometry(.12,.12,.05,16),new THREE.MeshPhongMaterial({color:0x888888,shininess:200}),.85,.65,1.2,Math.PI/2,0,0);
+  // Escape
+  add(new THREE.CylinderGeometry(.05,.07,3.5,8),new THREE.MeshPhongMaterial({color:0x555555}),-.6,.1,-.2,Math.PI/2,0,0);
+  // Rodas + freios
+  [[1.1,-.25,1.6],[-1.1,-.25,1.6],[1.1,-.25,-1.6],[-1.1,-.25,-1.6]].forEach(([x,y,z])=>{
+    add(new THREE.TorusGeometry(.38,.16,12,24),new THREE.MeshPhongMaterial({color:0x111111}),x,y,z,0,Math.PI/2,0);
+    add(new THREE.CylinderGeometry(.3,.3,.05,16),new THREE.MeshPhongMaterial({color:0xcccccc,shininess:300}),x,y,z,Math.PI/2,0,0);
+    add(new THREE.CylinderGeometry(.22,.22,.03,16),mF,x*.92,y,z,Math.PI/2,0,0);
+  });
+  // Suspensão
+  [[.9,-.1,1.6],[-.9,-.1,1.6],[.9,-.1,-1.6],[-.9,-.1,-1.6]].forEach(([x,y,z])=>{
+    const mSusp = new THREE.MeshPhongMaterial({color:0x4488ff});
+    add(new THREE.TorusGeometry(.12,.025,6,12),mSusp,x,y,z);
+    add(new THREE.CylinderGeometry(.03,.03,.4,8),mSusp,x,y-.1,z);
+  });
+  // Para-choques e faróis
+  add(new THREE.BoxGeometry(2.2,.35,.15),mS,0,.25,2.33);
+  add(new THREE.BoxGeometry(2.2,.3,.15),mS,0,.25,-2.33);
+  const mFar = new THREE.MeshPhongMaterial({color:0xffffaa,emissive:0x444400});
+  [[-.75,.55,2.3],[.75,.55,2.3]].forEach(p=>add(new THREE.BoxGeometry(.5,.18,.08),mFar,...p));
+  const mLan = new THREE.MeshPhongMaterial({color:0xff2200,emissive:0x330000});
+  [[-.75,.55,-2.3],[.75,.55,-2.3]].forEach(p=>add(new THREE.BoxGeometry(.5,.18,.08),mLan,...p));
+  // Chassis wireframe
+  add(new THREE.BoxGeometry(2,.08,4.2,4,1,8),new THREE.MeshBasicMaterial({color:0x00d4ff,wireframe:true,transparent:true,opacity:.06}),0,-.04,0);
+}
+
+const infoPecas = {
+  motor:    { nome:"MOTOR",    hz:"80–300 Hz",   cam:[0,1.8,2.8],  look:[0,.45,1.5],  info:"Motor 4 cilindros. Batidas em 80–300 Hz indicam biela ou ignição. Verifique óleo e sincronismo." },
+  correia:  { nome:"CORREIA",  hz:"1k–4k Hz",    cam:[2.2,1.2,1.5],look:[.85,.65,1.2],info:"Chiado agudo 1000–4000 Hz indica correia frouxa. Piora com aceleração — verifique tensionamento." },
+  suspensao:{ nome:"SUSPENSÃO",hz:"40–120 Hz",   cam:[2.5,.5,0],   look:[.9,-.1,0],   info:"Vibração 40–120 Hz indica amortecedor gasto ou bucha desgastada. Verifique nas 4 rodas." },
+  freios:   { nome:"FREIOS",   hz:"2k–6k Hz",    cam:[2.5,0,-1.5], look:[1.1,-.25,-1.6],info:"Rangido 2000–6000 Hz indica pastilha no limite. Risco de segurança — verifique imediatamente." },
+  escape:   { nome:"ESCAPE",   hz:"80–300 Hz",   cam:[-2,.5,-.5],  look:[-.6,.1,-.2], info:"Sopro grave indica vazamento no coletor. Procure fuligem nas juntas com motor frio." }
+};
+
+function focarPeca(nome) {
+  const info = infoPecas[nome];
+  if (!info) return;
+  autoRot = false;
+  document.querySelectorAll(".painel-item").forEach(e=>e.classList.remove("ativo"));
+  document.getElementById("btn-"+nome)?.classList.add("ativo");
+  camAlvo.set(...info.cam);
+  lookAlvo.set(...(info.look||[0,0,0]));
+  document.getElementById("freqComp").textContent = info.nome;
+  document.getElementById("freqValor").textContent = info.hz;
+  abrirModal(info.nome, info.info);
+}
+
+function alternarVista() { autoRot = !autoRot; document.getElementById("statusPill").textContent = autoRot ? "ROTAÇÃO AUTO" : "SISTEMA ATIVO"; }
+function alternarRaioX() {
+  modoRaioX = !modoRaioX;
+  grupoCarro.children.forEach(m => { if(m.material?.transparent) m.material.opacity = modoRaioX ? Math.min(m.material.opacity, .2) : m.material.opacity; });
+  document.getElementById("statusPill").textContent = modoRaioX ? "MODO RAIO-X" : "SISTEMA ATIVO";
+}
+function resetarCamera() {
+  camAlvo.set(0,2,6); lookAlvo.set(0,0,0);
+  quatCarro.identity(); // Reseta para posição original
+  zoomCam=6; autoRot=true;
+  document.querySelectorAll(".painel-item").forEach(e=>e.classList.remove("ativo"));
+  document.getElementById("btn-motor")?.classList.add("ativo");
+  document.getElementById("freqComp").textContent = "MOTOR";
+  document.getElementById("freqValor").textContent = "80–300 Hz";
+}
+
+function abrirModal(titulo, info) {
+  document.getElementById("modalTitulo").textContent = titulo;
+  document.getElementById("modalInfo").textContent = info;
+  document.getElementById("modalOverlay").classList.add("aberto");
+}
+function fecharModal() { document.getElementById("modalOverlay").classList.remove("aberto"); }
+
+function animar3d(t=0) {
+  animId3d = requestAnimationFrame(animar3d);
+  if (telaAtiva !== "t-home") return;
+
+  // Auto rotação suave via Quaternion
+  if (autoRot) {
+    autoRotQuat.setFromAxisAngle(eixoAutoRot, 0.003);
+    quatCarro.premultiply(autoRotQuat);
   }
 
-  if (req.method !== "POST") {
-    return res.status(405).json({ erro: "Método não permitido" });
+  // Aplica quaternion ao grupo do carro
+  grupoCarro.quaternion.copy(quatCarro);
+
+  // Câmera orbita suavemente ao redor do centro
+  camera3d.position.lerp(new THREE.Vector3(0, 1.5, zoomCam), .06);
+  camera3d.lookAt(lookAlvo);
+
+  if(luzP1) luzP1.intensity = 1.5+Math.sin(t*.002)*.5;
+  if(luzP2) luzP2.intensity = 1.2+Math.cos(t*.003)*.3;
+  if(particulas3d) particulas3d.rotation.y += .0003;
+  renderer3d.render(cena3d, camera3d);
+}
+
+window.addEventListener("resize", () => {
+  if (!renderer3d) return;
+  camera3d.aspect = innerWidth/innerHeight;
+  camera3d.updateProjectionMatrix();
+  renderer3d.setSize(innerWidth, innerHeight);
+});
+
+// ════════════════════════════════
+// ÁUDIO — ESPECTROGRAMA
+// ════════════════════════════════
+let audioCtx=null, analisador=null, mediaStream=null;
+let estaGravando=false, timerGrav=null, segsGrav=0;
+let animAudio=null, dadosFFT=null, espeOff=0;
+let espeCtx=null, freqCtx=null;
+
+function inicializarCanvasAudio() {
+  const espe = document.getElementById("espectrograma");
+  const freq = document.getElementById("canvas-freq");
+  espe.width = espe.offsetWidth || 460;
+  espe.height = 110;
+  freq.width = freq.offsetWidth || 460;
+  freq.height = 70;
+  espeCtx = espe.getContext("2d");
+  freqCtx = freq.getContext("2d");
+  espeCtx.fillStyle="#000"; espeCtx.fillRect(0,0,espe.width,espe.height);
+  freqCtx.fillStyle="#000"; freqCtx.fillRect(0,0,freq.width,freq.height);
+}
+
+async function alternarGravacao() {
+  if (estaGravando) { pararGravacao(); return; }
+  try {
+    mediaStream = await navigator.mediaDevices.getUserMedia({audio:true,video:false});
+    audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+    analisador = audioCtx.createAnalyser();
+    analisador.fftSize = 2048;
+    analisador.smoothingTimeConstant = .8;
+    audioCtx.createMediaStreamSource(mediaStream).connect(analisador);
+    estaGravando=true; segsGrav=0; dadosFFT=null; espeOff=0;
+    document.getElementById("btnGravar").classList.add("gravando");
+    document.getElementById("iconeGrav").textContent="⏹";
+    document.getElementById("statusMic").textContent="Gravando... aproxime do motor";
+    document.getElementById("statusMic").style.color="var(--vermelho)";
+    document.getElementById("btnAnalisarAudio").style.display="none";
+    timerGrav = setInterval(()=>{
+      segsGrav++;
+      const m=String(Math.floor(segsGrav/60)).padStart(2,"0");
+      const s=String(segsGrav%60).padStart(2,"0");
+      document.getElementById("timerGrav").textContent=`${m}:${s}`;
+      if(segsGrav>=15) pararGravacao();
+    },1000);
+    visualizarAudio();
+  } catch(e) { alert("Microfone não disponível. Verifique as permissões."); }
+}
+
+function pararGravacao() {
+  if (!estaGravando) return;
+  estaGravando=false; clearInterval(timerGrav);
+  cancelAnimationFrame(animAudio);
+  if (analisador) { dadosFFT=new Uint8Array(analisador.frequencyBinCount); analisador.getByteFrequencyData(dadosFFT); }
+  mediaStream?.getTracks().forEach(t=>t.stop());
+  document.getElementById("btnGravar").classList.remove("gravando");
+  document.getElementById("iconeGrav").textContent="🎙️";
+  document.getElementById("statusMic").textContent=`Gravação concluída (${segsGrav}s)`;
+  document.getElementById("statusMic").style.color="var(--verde)";
+  document.getElementById("btnAnalisarAudio").style.display="block";
+  for(let i=1;i<=8;i++) document.getElementById("b"+i).style.height="3px";
+}
+
+function visualizarAudio() {
+  if (!estaGravando||!analisador) return;
+  const buf = new Uint8Array(analisador.frequencyBinCount);
+  analisador.getByteFrequencyData(buf);
+  desenharEspectrograma(buf); desenharFreq(buf);
+  atualizarNivel(buf); detectarTempoReal(buf);
+  animAudio = requestAnimationFrame(visualizarAudio);
+}
+
+function desenharEspectrograma(d) {
+  const c=document.getElementById("espectrograma"); if(!espeCtx||!c)return;
+  const h=c.height, col=espeCtx.getImageData(espeOff,0,1,h);
+  for(let i=0;i<h;i++){
+    const v=d[Math.floor((i/h)*d.length)];
+    let r,g,b;
+    if(v<64){r=0;g=0;b=v*4;}
+    else if(v<128){r=0;g=(v-64)*4;b=255;}
+    else if(v<192){r=(v-128)*4;g=255;b=255-(v-128)*4;}
+    else{r=255;g=255-(v-192)*4;b=0;}
+    const idx=(h-1-i)*4;
+    col.data[idx]=r;col.data[idx+1]=g;col.data[idx+2]=b;col.data[idx+3]=255;
+  }
+  espeCtx.putImageData(col,espeOff,0);
+  espeOff=(espeOff+1)%c.width;
+  espeCtx.fillStyle="rgba(255,255,255,.2)";
+  espeCtx.fillRect((espeOff+1)%c.width,0,1,h);
+}
+
+function desenharFreq(d) {
+  const c=document.getElementById("canvas-freq"); if(!freqCtx||!c)return;
+  freqCtx.fillStyle="#000"; freqCtx.fillRect(0,0,c.width,c.height);
+  const w=c.width/d.length;
+  for(let i=0;i<d.length;i++){
+    const h=(d[i]/255)*c.height, r=d[i]/255;
+    freqCtx.fillStyle=r>.7?"#ef4444":r>.4?"#f59e0b":r>.1?"#00ff9d":"#111827";
+    freqCtx.fillRect(i*w,c.height-h,w,h);
+  }
+}
+
+function atualizarNivel(d) {
+  const med=d.reduce((a,b)=>a+b,0)/d.length;
+  const n=Math.floor((med/255)*8);
+  for(let i=1;i<=8;i++){
+    const b=document.getElementById("b"+i);
+    b.style.height=(i<=n?4+i*3:3)+"px";
+    b.style.background=i>6?"var(--vermelho)":i>4?"var(--amarelo)":"var(--verde)";
+  }
+}
+
+function detectarTempoReal(fft) {
+  const sr=audioCtx?.sampleRate||44100, bs=sr/2048;
+  const lista=document.getElementById("listaDeteccoes"); lista.innerHTML="";
+  let algum=false;
+  for(const [,f] of Object.entries(BRAIN)){
+    const bMin=Math.floor(f.fMin/bs), bMax=Math.ceil(f.fMax/bs);
+    let s=0,c=0;
+    for(let i=bMin;i<=Math.min(bMax,fft.length-1);i++){s+=fft[i];c++;}
+    const med=c>0?s/c:0, pct=Math.round((med/255)*100);
+    if(pct>5){
+      algum=true;
+      const det=med>=f.lim, mod=med>=f.lim*.6&&!det;
+      lista.innerHTML+=`<div class="freq-card ${det?"detectado":mod?"moderado":""}">
+        <span style="font-size:18px;">${f.icone}</span>
+        <div><div class="freq-nome">${f.nome}</div><div class="freq-hz">${f.fMin}–${f.fMax} Hz</div></div>
+        <div class="freq-pct ${det?"ativo":mod?"moderado":""}">${pct}%</div>
+      </div>`;
+    }
+  }
+  if(!algum) lista.innerHTML=`<div style="font-size:11px;color:rgba(255,255,255,.2);text-align:center;padding:8px;">Aguardando sinal...</div>`;
+}
+
+async function analisarAudioGravado() {
+  if (!dadosFFT) return;
+
+  // Prepara resumo das frequências para enviar ao Gemini
+  const sr = audioCtx?.sampleRate || 44100;
+  const bs = sr / 2048;
+  let resumoFreq = "Frequências com maior amplitude detectadas:\n";
+
+  for (const [, f] of Object.entries(BRAIN)) {
+    const bMin = Math.floor(f.fMin / bs);
+    const bMax = Math.ceil(f.fMax / bs);
+    let soma = 0, count = 0;
+    for (let i = bMin; i <= Math.min(bMax, dadosFFT.length - 1); i++) {
+      soma += dadosFFT[i]; count++;
+    }
+    const media = count > 0 ? soma / count : 0;
+    const pct = Math.round((media / 255) * 100);
+    if (pct > 10) resumoFreq += `- ${f.nome} (${f.fMin}–${f.fMax} Hz): intensidade ${pct}%\n`;
   }
 
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "POST");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  origemAudio = true;
+  dadosAnalise = { sintomas: ["análise_acústica"], descricao: `Gravação de ${segsGrav}s` };
+  irParaProcessando();
+
+  // Chama o Gemini API com retry e timeout
+  const veiculo = JSON.parse(localStorage.getItem("motorscanVeiculo") || "null");
+  const diagGemini = await chamarGemini({
+    dadosFrequencia: resumoFreq,
+    sintomas: [],
+    descricao: `Análise acústica de ${segsGrav} segundos de gravação do motor`,
+    veiculo: veiculo ? `${veiculo.marca} ${veiculo.modelo} ${veiculo.ano}` : "não informado"
+  });
+
+  if (diagGemini) {
+    diagAtual = {
+      problema: diagGemini.problema,
+      causa: diagGemini.causa,
+      status: diagGemini.status,
+      rec: diagGemini.recomendacao,
+      conf: diagGemini.confianca,
+      base: `Análise acústica IA — ${segsGrav}s de gravação`,
+      origemIA: true
+    };
+    window._hipoteses = (diagGemini.hipoteses || []).map(h => ({
+      causa: h.causa, conf: h.confianca
+    }));
+  }
+
+  // Completa a barra e exibe resultado
+  clearInterval(window._procInterval);
+  document.getElementById("procBarra").style.width = "100%";
+  document.getElementById("procStatus").textContent = "Relatório gerado!";
+  setTimeout(exibirResultado, 400);
+}
+
+// ════════════════════════════════
+// SINTOMAS MANUAIS
+// ════════════════════════════════
+const diagSintomas = [
+  {problema:"Chiado ao ligar",causa:"Correia do alternador desgastada",status:"atenção",rec:"Verifique tensão e estado da correia antes de substituir.",sinRel:["chiado_motor","dificuldade_partida"],combFort:[["chiado_motor","dificuldade_partida"]]},
+  {problema:"Vibração em baixa rotação",causa:"Suporte do motor comprometido",status:"atenção",rec:"Solicite inspeção dos coxins do motor.",sinRel:["vibracao","chiado_motor"],combFort:[["vibracao","chiado_motor"]]},
+  {problema:"Luz acesa no painel",causa:"Falha no sistema eletrônico",status:"moderado",rec:"Exija leitura com scanner e código de falha antes de autorizar serviço.",sinRel:["luz_painel","dificuldade_partida"],combFort:[["luz_painel","dificuldade_partida"]]},
+  {problema:"Barulho ao frear",causa:"Pastilhas de freio desgastadas",status:"urgente",rec:"Leve imediatamente. Peça para ver as pastilhas antes da troca.",sinRel:["barulho_freio","vibracao"],combFort:[["barulho_freio","vibracao"]]},
+  {problema:"Dificuldade para ligar",causa:"Falha na bateria ou ignição",status:"moderado",rec:"Peça teste de carga da bateria. Se boa, avalie ignição.",sinRel:["dificuldade_partida","luz_painel"],combFort:[["dificuldade_partida","luz_painel"]]},
+  {problema:"Perda de potência",causa:"Falha no sistema de alimentação",status:"atenção",rec:"Inspecione filtro, injetores e sensor MAF antes de autorizar trocas.",sinRel:["perda_potencia","consumo_alto","vibracao"],combFort:[["perda_potencia","consumo_alto"],["perda_potencia","vibracao"]]},
+  {problema:"Fumaça no escapamento",causa:"Falha de combustão ou desgaste interno",status:"urgente",rec:"Azul=óleo, Branca=junta, Preta=combustível. Anote a cor e informe ao mecânico.",sinRel:["fumaca","consumo_alto","perda_potencia"],combFort:[["fumaca","consumo_alto"],["fumaca","perda_potencia"]]}
+];
+
+const pesos={fumaca:3,barulho_freio:3,perda_potencia:2,vibracao:2,luz_painel:2,dificuldade_partida:2,consumo_alto:1,chiado_motor:1};
+
+async function coletarSintomas() {
+  const marcados=[...document.querySelectorAll('#t-sintomas input[type="checkbox"]:checked')];
+  if(!marcados.length){alert("Selecione pelo menos um sintoma.");return;}
+  const sintomas=marcados.map(cb=>cb.value);
+  const descricao=document.getElementById("descricaoUsuario").value.trim();
+  dadosAnalise={sintomas,descricao};
+  origemAudio=false;
+
+  // Diagnóstico local como fallback
+  const res=diagSintomas.map(d=>{
+    let pt=0,sConf=[];
+    d.sinRel.forEach(s=>{if(sintomas.includes(s)){pt+=pesos[s]||1;sConf.push(s);}});
+    d.combFort?.forEach(c=>{if(c.every(s=>sintomas.includes(s)))pt+=2;});
+    let confianca=pt<=1?40:pt===2?60:pt===3?75:pt===4?85:95;
+    return{...d,pt,confianca,sConf};
+  }).sort((a,b)=>b.pt-a.pt);
+
+  if(!res[0].pt){
+    diagAtual={problema:"Sinais insuficientes",causa:"Não foi possível identificar causa com os sintomas informados.",status:"atenção",rec:"Adicione mais sintomas ou use a análise acústica.",conf:0,base:"Sintomas manuais"};
+    window._hipoteses=[];
+  } else {
+    diagAtual={...res[0],conf:res[0].confianca,base:res[0].sConf.map(s=>nomesLegiveis[s]||s).join(", ")||"Sintomas manuais"};
+    window._hipoteses=res.filter(r=>r.pt>0).slice(1,3);
+  }
+
+  document.querySelectorAll('#t-sintomas input[type="checkbox"]').forEach(cb=>cb.checked=false);
+  document.getElementById("descricaoUsuario").value="";
+  irParaProcessando();
+
+  // Chama o Gemini API com retry e timeout
+  const veiculo = JSON.parse(localStorage.getItem("motorscanVeiculo") || "null");
+  const diagGemini = await chamarGemini({
+    sintomas: sintomas.map(s => nomesLegiveis[s] || s),
+    descricao: descricao || "",
+    veiculo: veiculo ? `${veiculo.marca} ${veiculo.modelo} ${veiculo.ano}` : "não informado"
+  });
+
+  if (diagGemini) {
+    diagAtual = {
+      problema: diagGemini.problema,
+      causa: diagGemini.causa,
+      status: diagGemini.status,
+      rec: diagGemini.recomendacao,
+      conf: diagGemini.confianca,
+      base: sintomas.map(s=>nomesLegiveis[s]||s).join(", "),
+      origemIA: true
+    };
+    window._hipoteses = (diagGemini.hipoteses || []).map(h => ({
+      causa: h.causa, conf: h.confianca
+    }));
+  }
+
+  // Completa a barra e exibe resultado
+  clearInterval(window._procInterval);
+  document.getElementById("procBarra").style.width = "100%";
+  document.getElementById("procStatus").textContent = "Relatório gerado!";
+  setTimeout(exibirResultado, 400);
+}
+
+// ════════════════════════════════
+// PROCESSANDO
+// ════════════════════════════════
+const procMsgs=["Consultando Gemini AI...","Analisando padrões...","Calculando probabilidades...","Gerando relatório..."];
+
+function irParaProcessando() {
+  irPara("t-proc");
+  document.getElementById("procBarra").style.width="0%";
+  document.getElementById("procStatus").textContent = procMsgs[0];
+  let p = 0;
+  // Barra anima até 90% e aguarda o Gemini
+  const iv = setInterval(()=>{
+    if (p < 90) {
+      p += 2;
+      document.getElementById("procBarra").style.width = p + "%";
+      document.getElementById("procStatus").textContent = procMsgs[Math.min(Math.floor(p/30), procMsgs.length-1)];
+    }
+  }, 60);
+  window._procInterval = iv;
+}
+
+// ════════════════════════════════
+// RESULTADO
+// ════════════════════════════════
+function estiloStatus(s){
+  if(s==="urgente")  return"background:#450a0a;color:#fca5a5;border:1px solid #7f1d1d;";
+  if(s==="moderado") return"background:#422006;color:#fcd34d;border:1px solid #78350f;";
+  if(s==="atenção")  return"background:#0c1a3a;color:#93c5fd;border:1px solid #1e3a5f;";
+  return"background:#052e16;color:#86efac;border:1px solid #14532d;";
+}
+
+function exibirResultado() {
+  const d = diagAtual;
+
+  // Ícone por nível de urgência
+  const icones = { urgente:"🚨", moderado:"⚠️", atenção:"🔵", estável:"✅" };
+  document.getElementById("iconeUrgencia").textContent = icones[d.status] || "🔍";
+
+  // Cor da borda do card principal
+  const cores = { urgente:"var(--vermelho)", moderado:"var(--amarelo)", atenção:"var(--azul)", estável:"var(--verde)" };
+  document.getElementById("cardPrincipal").style.borderLeftColor = cores[d.status] || "var(--amarelo)";
+  document.getElementById("cardUrgencia").style.borderLeftColor = cores[d.status] || "var(--amarelo)";
+  document.getElementById("cardUrgencia").style.borderLeft = `3px solid ${cores[d.status] || "var(--amarelo)"}`;
+
+  document.getElementById("origemBadge").innerHTML = origemAudio
+    ?`<span style="background:#0c1a3a;color:#93c5fd;padding:3px 12px;border-radius:999px;font-size:10px;font-weight:700;letter-spacing:2px;">${d.origemIA ? '🤖 GEMINI AI — ANÁLISE ACÚSTICA' : '🎙️ ANÁLISE ACÚSTICA LOCAL'}</span>`
+    :`<span style="background:#052e16;color:#86efac;padding:3px 12px;border-radius:999px;font-size:10px;font-weight:700;letter-spacing:2px;">${d.origemIA ? '🤖 GEMINI AI — SINTOMAS' : '📋 ANÁLISE LOCAL — SINTOMAS'}</span>`;
+
+  document.getElementById("rCausa").textContent = d.causa || d.problema;
+
+  const statusEl = document.getElementById("rStatus");
+  statusEl.textContent = d.status;
+  statusEl.style.cssText = `display:inline-block;padding:3px 14px;border-radius:999px;font-size:12px;font-weight:700;${estiloStatus(d.status)}`;
+
+  const conf = d.conf || 0;
+  document.getElementById("rConfianca").textContent = conf + "%";
+
+  // Anima barra de confiança
+  setTimeout(() => {
+    document.getElementById("barraConfianca").style.width = conf + "%";
+    const corBarra = conf >= 80 ? "var(--verde)" : conf >= 50 ? "var(--amarelo)" : "var(--vermelho)";
+    document.getElementById("barraConfianca").style.background = corBarra;
+    document.getElementById("rConfianca").style.color = corBarra;
+  }, 300);
+
+  document.getElementById("rRecomendacao").textContent = d.rec || d.recomendacao || "---";
+  document.getElementById("rBase").textContent = d.base || "---";
+
+  const hip = window._hipoteses || [];
+  document.getElementById("rHipoteses").innerHTML = hip.length
+    ? hip.map((h,i) => `<div style="margin-bottom:4px;">${i+2}ª: ${h.causa||h.nome} — ${h.conf||h.confianca||0}%</div>`).join("")
+    : "Nenhuma hipótese complementar.";
+
+  salvarHistorico(d);
+  irPara("t-resultado");
+}
+
+// ════════════════════════════════
+// HISTÓRICO / PRONTUÁRIO
+// ════════════════════════════════
+function salvarHistorico(d) {
+  const novo={
+    data:new Date().toLocaleDateString(),
+    problema:d.problema,causa:d.causa||d.problema,
+    status:d.status,conf:d.conf||0,
+    base:d.base||"---",origem:origemAudio?"Análise acústica":"Sintomas manuais"
+  };
+  historico.unshift(novo);
+  localStorage.setItem("motorscanHistorico",JSON.stringify(historico));
+}
+
+function limparHistorico() {
+  if(!historico.length)return;
+  if(!confirm("Apagar todo o histórico?"))return;
+  historico=[]; localStorage.removeItem("motorscanHistorico");
+  renderizarProntuario();
+}
+
+function renderizarProntuario() {
+  const lista=document.getElementById("listaProntuario");
+  const resumo=document.getElementById("resumoProntuario");
+  lista.innerHTML=""; resumo.innerHTML="";
+
+  if(!historico.length){
+    resumo.innerHTML=`<div style="font-size:12px;color:rgba(255,255,255,.3);text-align:center;letter-spacing:2px;">NENHUM REGISTRO AINDA</div>`;
+    return;
+  }
+
+  const total=historico.length;
+  const urg=historico.filter(r=>r.status==="urgente").length;
+  const mod=historico.filter(r=>r.status==="moderado"||r.status==="atenção").length;
+
+  resumo.innerHTML=`
+    <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:8px;">
+      <span style="color:rgba(255,255,255,.4);">Total de análises</span>
+      <span style="font-weight:700;">${total}</span>
+    </div>
+    <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:8px;">
+      <span style="color:rgba(255,255,255,.4);">Urgentes</span>
+      <span style="font-weight:700;color:${urg>0?"var(--vermelho)":"rgba(255,255,255,.4)"};">${urg}</span>
+    </div>
+    <div style="display:flex;justify-content:space-between;font-size:13px;">
+      <span style="color:rgba(255,255,255,.4);">Atenção</span>
+      <span style="font-weight:700;color:${mod>0?"var(--amarelo)":"rgba(255,255,255,.4)"};">${mod}</span>
+    </div>`;
+
+  historico.forEach(item=>{
+    const cls=item.status==="urgente"?"urgente":item.status==="moderado"?"moderado":"atencao";
+    lista.innerHTML+=`
+      <div class="registro-card ${cls}" style="margin-bottom:10px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <span style="font-size:10px;color:rgba(255,255,255,.3);letter-spacing:1px;">${item.data} · ${item.origem||""}</span>
+          <span style="display:inline-block;padding:2px 10px;border-radius:999px;font-size:10px;font-weight:700;${estiloStatus(item.status)}">${item.status}</span>
+        </div>
+        <div style="font-size:14px;font-weight:600;margin-bottom:4px;">${item.problema}</div>
+        <div style="font-size:12px;color:rgba(255,255,255,.5);">${item.causa}</div>
+        <div style="font-size:11px;color:var(--verde);margin-top:6px;">Confiança: ${item.conf||0}%</div>
+        <div style="font-size:11px;color:rgba(255,255,255,.3);margin-top:2px;">Base: ${item.base||"---"}</div>
+      </div>`;
+  });
+}
+
+// ── Funções de arrastar via área dedicada ──
+function iniciarArrastar(e) {
+  arrastando=true; autoRot=false;
+  uxAnt=e.clientX; uyAnt=e.clientY;
+  document.addEventListener("mousemove", moverArrastar);
+  document.addEventListener("mouseup", pararArrastar);
+}
+
+function moverArrastar(e) {
+  if(!arrastando) return;
+  const dx=e.clientX-uxAnt, dy=e.clientY-uyAnt;
+  const qY=new THREE.Quaternion();
+  qY.setFromAxisAngle(new THREE.Vector3(0,1,0), dx*0.01);
+  const qX=new THREE.Quaternion();
+  qX.setFromAxisAngle(new THREE.Vector3(1,0,0), dy*0.01);
+  quatCarro.premultiply(qY).premultiply(qX);
+  uxAnt=e.clientX; uyAnt=e.clientY;
+}
+
+function pararArrastar() {
+  arrastando=false;
+  document.removeEventListener("mousemove", moverArrastar);
+  document.removeEventListener("mouseup", pararArrastar);
+}
+
+function iniciarArrastarTouch(e) {
+  autoRot=false;
+  if(e.touches.length===1){
+    uxAnt=e.touches[0].clientX; uyAnt=e.touches[0].clientY;
+    document.addEventListener("touchmove", moverArrastarTouch, {passive:true});
+    document.addEventListener("touchend", pararArrastarTouch);
+  } else if(e.touches.length===2){
+    distPinca=Math.hypot(e.touches[0].clientX-e.touches[1].clientX, e.touches[0].clientY-e.touches[1].clientY);
+    document.addEventListener("touchmove", moverArrastarTouch, {passive:true});
+    document.addEventListener("touchend", pararArrastarTouch);
+  }
+}
+
+function moverArrastarTouch(e) {
+  if(e.touches.length===1){
+    const dx=e.touches[0].clientX-uxAnt, dy=e.touches[0].clientY-uyAnt;
+    const qY=new THREE.Quaternion();
+    qY.setFromAxisAngle(new THREE.Vector3(0,1,0), dx*0.012);
+    const qX=new THREE.Quaternion();
+    qX.setFromAxisAngle(new THREE.Vector3(1,0,0), dy*0.012);
+    quatCarro.premultiply(qY).premultiply(qX);
+    uxAnt=e.touches[0].clientX; uyAnt=e.touches[0].clientY;
+  } else if(e.touches.length===2){
+    const nd=Math.hypot(e.touches[0].clientX-e.touches[1].clientX, e.touches[0].clientY-e.touches[1].clientY);
+    zoomCam-=(nd-distPinca)*.02; zoomCam=Math.max(2.5,Math.min(12,zoomCam)); distPinca=nd;
+  }
+}
+
+function pararArrastarTouch() {
+  document.removeEventListener("touchmove", moverArrastarTouch);
+  document.removeEventListener("touchend", pararArrastarTouch);
+}
+
+// ════════════════════════════════
+// SETAS DE NAVEGAÇÃO STREET VIEW
+// ════════════════════════════════
+let setasVisiveis = false;
+
+function alternarSetas() {
+  setasVisiveis = !setasVisiveis;
+  document.getElementById("setas-nav").style.display = setasVisiveis ? "block" : "none";
+  document.getElementById("btnSetas").style.borderColor = setasVisiveis ? "var(--verde)" : "var(--azul)";
+  document.getElementById("btnSetas").style.color = setasVisiveis ? "var(--verde)" : "var(--azul)";
+  autoRot = false;
+}
+
+function voarePara(peca) {
+  const info = infoPecas[peca];
+  if (!info) return;
+
+  // Desativa rotação automática
+  autoRot = false;
+
+  // Atualiza painel lateral
+  document.querySelectorAll(".painel-item").forEach(e => e.classList.remove("ativo"));
+  document.getElementById("btn-" + peca)?.classList.add("ativo");
+
+  // Define destino da câmera
+  camAlvo.set(...info.cam);
+  lookAlvo.set(...(info.look || [0, 0, 0]));
+
+  // Atualiza display
+  document.getElementById("freqComp").textContent = info.nome;
+  document.getElementById("freqValor").textContent = info.hz;
+  document.getElementById("statusPill").textContent = "NAVEGANDO → " + info.nome;
+
+  // Reseta rotação para visão frontal da peça
+  quatCarro.identity();
+
+  // Abre modal após a câmera chegar
+  setTimeout(() => abrirModal(info.nome, info.info), 800);
+
+  // Oculta setas durante o voo
+  document.getElementById("setas-nav").style.opacity = "0.3";
+  setTimeout(() => {
+    document.getElementById("setas-nav").style.opacity = "1";
+    document.getElementById("statusPill").textContent = "SISTEMA ATIVO";
+  }, 1200);
+}
+
+// ════════════════════════════════
+// GEMINI API — COM RETRY E TIMEOUT
+// ════════════════════════════════
+async function chamarGemini(payload, tentativa=1) {
+  const TIMEOUT = 8000; // 8 segundos
+  const MAX_TENTATIVAS = 2;
 
   try {
-    const { sintomas, descricao, dadosFrequencia, veiculo } = req.body;
-    const modoAudio = !!dadosFrequencia;
+    // Promise com timeout
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), TIMEOUT);
 
-    const promptAudio = `Você é um engenheiro de diagnóstico automotivo especializado em análise acústica de motores.
+    const resposta = await fetch("/api/gemini", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      signal: controller.signal
+    });
 
-VEÍCULO: ${veiculo || "não informado"}
-
-DADOS ACÚSTICOS CAPTURADOS VIA MICROFONE:
-${dadosFrequencia}
-
-CONTEXTO TÉCNICO:
-- Dados capturados pelo microfone do celular próximo ao motor via FFT
-- Intensidade em percentual (0-100%)
-- Graves 20-300 Hz: componentes mecânicos pesados (biela, virabrequim, pistões)
-- Médios 300-2000 Hz: válvulas, correia dentada, alternador
-- Agudos 2000-8000 Hz: rolamentos, pastilhas, correias de acessórios
-
-Identifique a falha mecânica mais provável e responda APENAS em JSON:
-
-{
-  "problema": "nome técnico curto da falha",
-  "causa": "explicação técnica da causa em uma frase clara",
-  "status": "urgente|moderado|atenção|estável",
-  "recomendacao": "o que o usuário deve pedir especificamente ao mecânico",
-  "confianca": número de 0 a 100,
-  "hipoteses": [
-    {"causa": "segunda hipótese técnica", "confianca": número},
-    {"causa": "terceira hipótese técnica", "confianca": número}
-  ]
-}`;
-
-    const promptSintomas = `Você é um especialista em diagnóstico automotivo brasileiro.
-
-VEÍCULO: ${veiculo || "não informado"}
-
-SINTOMAS RELATADOS:
-${sintomas && sintomas.length > 0 ? sintomas.join("\n") : "não informados"}
-
-${descricao ? `DESCRIÇÃO DO USUÁRIO:\n${descricao}` : ""}
-
-Forneça diagnóstico técnico preciso e prático. Use linguagem simples mas técnica.
-Responda APENAS em JSON:
-
-{
-  "problema": "nome do problema identificado",
-  "causa": "causa técnica provável em uma frase",
-  "status": "urgente|moderado|atenção|estável",
-  "recomendacao": "orientação específica do que pedir ao mecânico com detalhes práticos",
-  "confianca": número de 0 a 100,
-  "hipoteses": [
-    {"causa": "segunda hipótese", "confianca": número},
-    {"causa": "terceira hipótese", "confianca": número}
-  ]
-}`;
-
-    const prompt = modoAudio ? promptAudio : promptSintomas;
-
-    const resposta = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: {
-            temperature: modoAudio ? 0.2 : 0.3,
-            maxOutputTokens: 1024,
-          }
-        })
-      }
-    );
+    clearTimeout(timer);
 
     if (!resposta.ok) {
-      const erro = await resposta.text();
-      console.error("Erro Gemini:", erro);
-      return res.status(resposta.status).json({
-        erro: `Gemini retornou ${resposta.status}`,
-        detalhes: erro.substring(0, 200)
-      });
+      // Erro 429 = cota esgotada — não adianta tentar de novo
+      if (resposta.status === 429) {
+        console.warn("Gemini: cota esgotada — usando análise local");
+        return null;
+      }
+      throw new Error(`HTTP ${resposta.status}`);
     }
 
     const dados = await resposta.json();
-    const texto = dados.candidates?.[0]?.content?.parts?.[0]?.text || "";
-    const textoLimpo = texto.replace(/```json|```/g, "").trim();
+    return dados.diagnostico || null;
 
-    let diagnostico;
-    try {
-      diagnostico = JSON.parse(textoLimpo);
-    } catch (e) {
-      const match = textoLimpo.match(/\{[\s\S]*\}/);
-      if (match) {
-        try { diagnostico = JSON.parse(match[0]); }
-        catch { diagnostico = null; }
-      }
+  } catch (e) {
+    if (e.name === "AbortError") {
+      console.warn("Gemini: timeout — usando análise local");
+      return null;
     }
-
-    if (!diagnostico) {
-      diagnostico = {
-        problema: "Análise concluída",
-        causa: "Verifique com um mecânico para confirmação.",
-        status: "atenção",
-        recomendacao: "Leve o veículo para avaliação presencial com um mecânico de confiança.",
-        confianca: 55,
-        hipoteses: []
-      };
+    // Tenta de novo se não for a última tentativa
+    if (tentativa < MAX_TENTATIVAS) {
+      console.warn(`Gemini: tentativa ${tentativa} falhou, tentando novamente...`);
+      await new Promise(r => setTimeout(r, 1500));
+      return chamarGemini(payload, tentativa + 1);
     }
-
-    // Valida campos
-    diagnostico.problema     = diagnostico.problema     || "Problema identificado";
-    diagnostico.causa        = diagnostico.causa        || "Causa não determinada";
-    diagnostico.status       = ["urgente","moderado","atenção","estável"].includes(diagnostico.status) ? diagnostico.status : "atenção";
-    diagnostico.recomendacao = diagnostico.recomendacao || "Leve para avaliação com mecânico de confiança.";
-    diagnostico.confianca    = Number(diagnostico.confianca) || 60;
-    diagnostico.hipoteses    = diagnostico.hipoteses    || [];
-
-    return res.status(200).json({ diagnostico });
-
-  } catch (erro) {
-    console.error("Erro interno:", erro);
-    return res.status(500).json({ erro: "Erro interno do servidor" });
+    console.warn("Gemini indisponível:", e);
+    return null;
   }
 }
+
+// ════════════════════════════════
+// CADASTRO DO VEÍCULO
+// ════════════════════════════════
+const modelosPorMarca = {
+  Fiat: ["Mobi","Argo","Cronos","Pulse","Strada","Toro","Fiorino","Doblo","500"],
+  Chevrolet: ["Onix","Onix Plus","Tracker","S-10","Spin","Equinox","Montana","Cruze"],
+  Volkswagen: ["Gol","Polo","Virtus","T-Cross","Taos","Saveiro","Amarok","Fox"],
+  Hyundai: ["HB20","HB20S","Creta","Tucson","Santa Fe","i30","Elantra"],
+  Toyota: ["Corolla","Yaris","Hilux","SW4","RAV4","Prius","Etios"],
+  Renault: ["Kwid","Sandero","Logan","Duster","Captur","Oroch","Zoe"],
+  Ford: ["Ka","EcoSport","Ranger","Territory","Bronco","Maverick"],
+  Honda: ["Fit","City","Civic","HR-V","CR-V","WR-V","Accord"],
+  Jeep: ["Renegade","Compass","Commander","Wrangler","Gladiator"],
+  Nissan: ["Kicks","Versa","Sentra","Frontier","March"],
+  Outro: ["Outro modelo"]
+};
+
+function atualizarModelos() {
+  const marca = document.getElementById("vMarca").value;
+  const select = document.getElementById("vModelo");
+  select.innerHTML = '<option value="">Selecione o modelo...</option>';
+  if (marca && modelosPorMarca[marca]) {
+    modelosPorMarca[marca].forEach(m => {
+      select.innerHTML += `<option value="${m}">${m}</option>`;
+    });
+  }
+}
+
+function preencherAnos() {
+  const select = document.getElementById("vAno");
+  const anoAtual = new Date().getFullYear();
+  for (let a = anoAtual; a >= 2000; a--) {
+    select.innerHTML += `<option value="${a}">${a}</option>`;
+  }
+}
+
+function salvarVeiculo() {
+  const marca  = document.getElementById("vMarca").value;
+  const modelo = document.getElementById("vModelo").value;
+  const ano    = document.getElementById("vAno").value;
+  const cor    = document.getElementById("vCor").value;
+
+  if (!marca || !modelo || !ano) {
+    alert("Preencha pelo menos marca, modelo e ano.");
+    return;
+  }
+
+  const veiculo = { marca, modelo, ano, cor };
+  localStorage.setItem("motorscanVeiculo", JSON.stringify(veiculo));
+  atualizarPainelVeiculo(veiculo);
+  alert(`✅ ${marca} ${modelo} ${ano} salvo com sucesso!`);
+  irPara("t-home");
+}
+
+function carregarVeiculo() {
+  const v = JSON.parse(localStorage.getItem("motorscanVeiculo") || "null");
+  if (v) {
+    atualizarPainelVeiculo(v);
+    // Preenche os selects
+    document.getElementById("vMarca").value = v.marca;
+    atualizarModelos();
+    document.getElementById("vModelo").value = v.modelo;
+    document.getElementById("vAno").value = v.ano;
+    document.getElementById("vCor").value = v.cor || "";
+  }
+  return v;
+}
+
+function atualizarPainelVeiculo(v) {
+  // Atualiza o painel lateral da tela home
+  const el = document.getElementById("painelVeiculo");
+  if (el) {
+    el.innerHTML = `<div style="font-size:13px;font-weight:600;">${v.marca} ${v.modelo}</div>
+    <div style="font-size:11px;color:rgba(255,255,255,.4);">${v.ano}${v.cor ? ' · ' + v.cor : ''}</div>`;
+  }
+}
+
+// ════════════════════════════════
+// COMPARTILHAMENTO
+// ════════════════════════════════
+function compartilharWhatsApp() {
+  const d = diagAtual;
+  if (!d) return;
+  const msg = `🚗 *MotorScan AI — Diagnóstico do meu veículo*\n\n` +
+    `🔍 *Problema:* ${d.problema}\n` +
+    `⚡ *Causa:* ${d.causa}\n` +
+    `🚨 *Urgência:* ${d.status?.toUpperCase()}\n` +
+    `📊 *Confiança:* ${d.conf || 0}%\n\n` +
+    `💡 *Recomendação:*\n${d.rec || d.recomendacao}\n\n` +
+    `⚠️ _Orientação preliminar — confirme com um profissional._\n\n` +
+    `🌐 Teste você também: https://motorscan-web.vercel.app`;
+
+  const url = `https://wa.me/?text=${encodeURIComponent(msg)}`;
+  window.open(url, "_blank");
+}
+
+function copiarResultado() {
+  const d = diagAtual;
+  if (!d) return;
+  const texto = `MotorScan AI — Diagnóstico do veículo\n\n` +
+    `Problema: ${d.problema}\n` +
+    `Causa: ${d.causa}\n` +
+    `Urgência: ${d.status?.toUpperCase()}\n` +
+    `Confiança: ${d.conf || 0}%\n\n` +
+    `Recomendação:\n${d.rec || d.recomendacao}\n\n` +
+    `Orientação preliminar — confirme com um profissional.\n\n` +
+    `Teste você também: https://motorscan-web.vercel.app`;
+
+  navigator.clipboard.writeText(texto).then(() => {
+    const btn = document.getElementById("btnCopiar");
+    btn.textContent = "✅ COPIADO!";
+    btn.style.borderColor = "var(--verde)";
+    btn.style.color = "var(--verde)";
+    setTimeout(() => {
+      btn.textContent = "📋 COPIAR";
+      btn.style.borderColor = "var(--azul)";
+      btn.style.color = "var(--azul)";
+    }, 2500);
+  });
+}
+
+// Inicializa o 3D ao carregar — remove classe oculto da home
+window.addEventListener("load", () => {
+  preencherAnos();
+  carregarVeiculo();
+  setTimeout(() => {
+    document.getElementById("canvas3d").classList.remove("oculto");
+    inicializarCanvas3D();
+  }, 1200);
+});
+</script>
+</body>
+</html>
