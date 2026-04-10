@@ -4,48 +4,79 @@
 
 export default async function handler(req, res) {
 
-  // Permite apenas requisições POST
+  if (req.method === "OPTIONS") {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+    return res.status(200).end();
+  }
+
   if (req.method !== "POST") {
     return res.status(405).json({ erro: "Método não permitido" });
   }
 
-  // Permite chamadas do domínio do app
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
   try {
-    const { sintomas, descricao, dadosFrequencia } = req.body;
+    const { sintomas, descricao, dadosFrequencia, veiculo } = req.body;
+    const modoAudio = !!dadosFrequencia;
 
-    // Monta o prompt para o Gemini
-    const prompt = `Você é um especialista em diagnóstico automotivo. Analise os seguintes dados de um veículo e forneça um diagnóstico técnico preciso.
+    const promptAudio = `Você é um engenheiro de diagnóstico automotivo especializado em análise acústica de motores.
 
-${dadosFrequencia ? `DADOS ACÚSTICOS CAPTURADOS:
+VEÍCULO: ${veiculo || "não informado"}
+
+DADOS ACÚSTICOS CAPTURADOS VIA MICROFONE:
 ${dadosFrequencia}
 
-` : ""}${sintomas && sintomas.length > 0 ? `SINTOMAS RELATADOS PELO USUÁRIO:
-${sintomas.join(", ")}
+CONTEXTO TÉCNICO:
+- Dados capturados pelo microfone do celular próximo ao motor via FFT
+- Intensidade em percentual (0-100%)
+- Graves 20-300 Hz: componentes mecânicos pesados (biela, virabrequim, pistões)
+- Médios 300-2000 Hz: válvulas, correia dentada, alternador
+- Agudos 2000-8000 Hz: rolamentos, pastilhas, correias de acessórios
 
-` : ""}${descricao ? `DESCRIÇÃO ADICIONAL:
-${descricao}
-
-` : ""}Com base nesses dados, responda APENAS no seguinte formato JSON, sem nenhum texto adicional:
+Identifique a falha mecânica mais provável e responda APENAS em JSON:
 
 {
-  "problema": "nome curto do problema identificado",
+  "problema": "nome técnico curto da falha",
+  "causa": "explicação técnica da causa em uma frase clara",
+  "status": "urgente|moderado|atenção|estável",
+  "recomendacao": "o que o usuário deve pedir especificamente ao mecânico",
+  "confianca": número de 0 a 100,
+  "hipoteses": [
+    {"causa": "segunda hipótese técnica", "confianca": número},
+    {"causa": "terceira hipótese técnica", "confianca": número}
+  ]
+}`;
+
+    const promptSintomas = `Você é um especialista em diagnóstico automotivo brasileiro.
+
+VEÍCULO: ${veiculo || "não informado"}
+
+SINTOMAS RELATADOS:
+${sintomas && sintomas.length > 0 ? sintomas.join("\n") : "não informados"}
+
+${descricao ? `DESCRIÇÃO DO USUÁRIO:\n${descricao}` : ""}
+
+Forneça diagnóstico técnico preciso e prático. Use linguagem simples mas técnica.
+Responda APENAS em JSON:
+
+{
+  "problema": "nome do problema identificado",
   "causa": "causa técnica provável em uma frase",
   "status": "urgente|moderado|atenção|estável",
-  "recomendacao": "orientação técnica clara para o usuário levar à oficina",
+  "recomendacao": "orientação específica do que pedir ao mecânico com detalhes práticos",
   "confianca": número de 0 a 100,
   "hipoteses": [
     {"causa": "segunda hipótese", "confianca": número},
     {"causa": "terceira hipótese", "confianca": número}
   ]
-}
+}`;
 
-Seja direto e técnico. O usuário vai usar isso para conversar com um mecânico.`;
+    const prompt = modoAudio ? promptAudio : promptSintomas;
 
-    // Chama o Gemini API
     const resposta = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
       {
@@ -54,7 +85,7 @@ Seja direto e técnico. O usuário vai usar isso para conversar com um mecânico
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
           generationConfig: {
-            temperature: 0.3,
+            temperature: modoAudio ? 0.2 : 0.3,
             maxOutputTokens: 1024,
           }
         })
@@ -64,30 +95,45 @@ Seja direto e técnico. O usuário vai usar isso para conversar com um mecânico
     if (!resposta.ok) {
       const erro = await resposta.text();
       console.error("Erro Gemini:", erro);
-      return res.status(500).json({ erro: "Erro ao consultar o Gemini" });
+      return res.status(resposta.status).json({
+        erro: `Gemini retornou ${resposta.status}`,
+        detalhes: erro.substring(0, 200)
+      });
     }
 
     const dados = await resposta.json();
     const texto = dados.candidates?.[0]?.content?.parts?.[0]?.text || "";
-
-    // Remove marcadores de código se existirem
     const textoLimpo = texto.replace(/```json|```/g, "").trim();
 
-    // Tenta fazer parse do JSON
     let diagnostico;
     try {
       diagnostico = JSON.parse(textoLimpo);
     } catch (e) {
-      // Se não conseguir parsear, retorna resposta genérica
+      const match = textoLimpo.match(/\{[\s\S]*\}/);
+      if (match) {
+        try { diagnostico = JSON.parse(match[0]); }
+        catch { diagnostico = null; }
+      }
+    }
+
+    if (!diagnostico) {
       diagnostico = {
         problema: "Análise concluída",
-        causa: textoLimpo.substring(0, 200),
+        causa: "Verifique com um mecânico para confirmação.",
         status: "atenção",
         recomendacao: "Leve o veículo para avaliação presencial com um mecânico de confiança.",
-        confianca: 60,
+        confianca: 55,
         hipoteses: []
       };
     }
+
+    // Valida campos
+    diagnostico.problema     = diagnostico.problema     || "Problema identificado";
+    diagnostico.causa        = diagnostico.causa        || "Causa não determinada";
+    diagnostico.status       = ["urgente","moderado","atenção","estável"].includes(diagnostico.status) ? diagnostico.status : "atenção";
+    diagnostico.recomendacao = diagnostico.recomendacao || "Leve para avaliação com mecânico de confiança.";
+    diagnostico.confianca    = Number(diagnostico.confianca) || 60;
+    diagnostico.hipoteses    = diagnostico.hipoteses    || [];
 
     return res.status(200).json({ diagnostico });
 
