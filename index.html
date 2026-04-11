@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>MotorScan AI — Diagnóstico Automotivo Inteligente</title>
+  <meta name="description" content="Analise o som do seu motor com o celular e descubra falhas mecânicas antes de ir à oficina. Grátis."/>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:ital,wght@0,300;0,400;0,600;1,300&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --azul:    #00d4ff;
+      --verde:   #00ff9d;
+      --laranja: #ff6b35;
+      --fundo:   #030a12;
+      --texto:   #e8f4f8;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--fundo);
+      color: var(--texto);
+      font-family: 'Barlow', sans-serif;
+      font-weight: 300;
+      overflow-x: hidden;
+    }
+
+    /* ── PARTÍCULAS DE FUNDO ── */
+    #particulas {
+      position: fixed; inset: 0;
+      pointer-events: none; z-index: 0;
+      overflow: hidden;
+    }
+
+    .particula {
+      position: absolute;
+      width: 2px; height: 2px;
+      background: var(--azul);
+      border-radius: 50%;
+      opacity: 0;
+      animation: flutuar linear infinite;
+    }
+
+    @keyframes flutuar {
+      0%   { opacity: 0; transform: translateY(100vh) scale(0); }
+      10%  { opacity: 0.6; }
+      90%  { opacity: 0.2; }
+      100% { opacity: 0; transform: translateY(-10vh) scale(1.5); }
+    }
+
+    /* ── GRADE DE FUNDO ── */
+    .grade {
+      position: fixed; inset: 0; z-index: 0;
+      background-image:
+        linear-gradient(rgba(0,212,255,0.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,212,255,0.025) 1px, transparent 1px);
+      background-size: 60px 60px;
+      pointer-events: none;
+    }
+
+    /* ── NAV ── */
+    nav {
+      position: fixed; top: 0; left: 0; right: 0;
+      z-index: 100;
+      padding: 20px 40px;
+      display: flex; align-items: center; justify-content: space-between;
+      background: linear-gradient(180deg, rgba(3,10,18,0.95) 0%, transparent 100%);
+      border-bottom: 1px solid rgba(0,212,255,0.08);
+    }
+
+    .nav-logo {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 24px; letter-spacing: 4px;
+      color: var(--azul);
+    }
+    .nav-logo span { color: var(--verde); }
+
+    .nav-btn {
+      font-family: 'Barlow', sans-serif;
+      font-size: 12px; font-weight: 600;
+      letter-spacing: 3px; text-transform: uppercase;
+      padding: 10px 24px; border-radius: 2px;
+      border: 1px solid var(--verde);
+      background: rgba(0,255,157,0.08);
+      color: var(--verde); cursor: pointer;
+      text-decoration: none;
+      transition: all 0.2s;
+    }
+    .nav-btn:hover { background: rgba(0,255,157,0.2); box-shadow: 0 0 20px rgba(0,255,157,0.3); }
+
+    /* ── SEÇÕES ── */
+    section { position: relative; z-index: 1; }
+
+    /* ── HERO ── */
+    .hero {
+      min-height: 100vh;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      text-align: center;
+      padding: 120px 20px 80px;
+    }
+
+    .hero-badge {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 10px; letter-spacing: 4px;
+      color: var(--verde);
+      border: 1px solid rgba(0,255,157,0.3);
+      padding: 6px 16px; border-radius: 2px;
+      margin-bottom: 32px;
+      animation: entrar 0.8s ease forwards;
+      opacity: 0;
+    }
+
+    .hero-titulo {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: clamp(56px, 12vw, 120px);
+      line-height: 0.95;
+      letter-spacing: 2px;
+      color: #fff;
+      margin-bottom: 8px;
+      animation: entrar 0.8s ease 0.2s forwards;
+      opacity: 0;
+    }
+
+    .hero-titulo .destaque {
+      color: var(--azul);
+      text-shadow: 0 0 40px rgba(0,212,255,0.4);
+    }
+
+    .hero-sub {
+      font-size: clamp(16px, 3vw, 22px);
+      font-weight: 300;
+      color: rgba(255,255,255,0.5);
+      max-width: 600px;
+      line-height: 1.6;
+      margin: 24px auto 48px;
+      animation: entrar 0.8s ease 0.4s forwards;
+      opacity: 0;
+    }
+
+    .hero-cta {
+      display: flex; gap: 16px; flex-wrap: wrap;
+      justify-content: center;
+      animation: entrar 0.8s ease 0.6s forwards;
+      opacity: 0;
+    }
+
+    .btn-primary {
+      font-family: 'Barlow', sans-serif;
+      font-size: 14px; font-weight: 600;
+      letter-spacing: 3px; text-transform: uppercase;
+      padding: 16px 40px; border-radius: 2px;
+      border: none; cursor: pointer;
+      background: var(--azul); color: #000;
+      text-decoration: none;
+      transition: all 0.2s;
+      box-shadow: 0 0 30px rgba(0,212,255,0.3);
+    }
+    .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 0 50px rgba(0,212,255,0.5); }
+
+    .btn-secondary {
+      font-family: 'Barlow', sans-serif;
+      font-size: 14px; font-weight: 600;
+      letter-spacing: 3px; text-transform: uppercase;
+      padding: 16px 40px; border-radius: 2px;
+      border: 1px solid rgba(255,255,255,0.2);
+      background: transparent; color: rgba(255,255,255,0.6);
+      text-decoration: none; cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-secondary:hover { border-color: var(--azul); color: var(--azul); }
+
+    @keyframes entrar {
+      from { opacity: 0; transform: translateY(20px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ── MÉTRICAS ── */
+    .metricas {
+      display: flex; justify-content: center;
+      gap: 0; flex-wrap: wrap;
+      border-top: 1px solid rgba(0,212,255,0.1);
+      border-bottom: 1px solid rgba(0,212,255,0.1);
+      margin: 0; padding: 0;
+    }
+
+    .metrica {
+      flex: 1; min-width: 160px;
+      padding: 40px 20px; text-align: center;
+      border-right: 1px solid rgba(0,212,255,0.1);
+    }
+    .metrica:last-child { border-right: none; }
+
+    .metrica-num {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 48px; color: var(--azul);
+      line-height: 1;
+    }
+
+    .metrica-label {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 10px; color: rgba(255,255,255,0.35);
+      letter-spacing: 2px; margin-top: 6px;
+    }
+
+    /* ── COMO FUNCIONA ── */
+    .como {
+      padding: 100px 20px;
+      max-width: 1100px; margin: 0 auto;
+    }
+
+    .secao-label {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 10px; color: var(--azul);
+      letter-spacing: 4px; text-align: center;
+      margin-bottom: 16px;
+    }
+
+    .secao-titulo {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: clamp(36px, 6vw, 64px);
+      text-align: center; letter-spacing: 2px;
+      color: #fff; margin-bottom: 64px;
+    }
+
+    .passos {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 2px;
+    }
+
+    .passo {
+      background: rgba(0,10,20,0.8);
+      border: 1px solid rgba(0,212,255,0.08);
+      padding: 40px 32px;
+      position: relative;
+      transition: all 0.3s;
+    }
+
+    .passo:hover {
+      border-color: rgba(0,212,255,0.3);
+      background: rgba(0,20,40,0.9);
+    }
+
+    .passo-num {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 80px; line-height: 1;
+      color: rgba(0,212,255,0.08);
+      position: absolute; top: 20px; right: 24px;
+    }
+
+    .passo-icone { font-size: 36px; margin-bottom: 20px; }
+
+    .passo-titulo {
+      font-family: 'Barlow', sans-serif;
+      font-size: 18px; font-weight: 600;
+      color: #fff; margin-bottom: 10px;
+    }
+
+    .passo-desc {
+      font-size: 14px; color: rgba(255,255,255,0.45);
+      line-height: 1.7;
+    }
+
+    /* ── FEATURES ── */
+    .features {
+      padding: 100px 20px;
+      background: rgba(0,212,255,0.02);
+      border-top: 1px solid rgba(0,212,255,0.06);
+      border-bottom: 1px solid rgba(0,212,255,0.06);
+    }
+
+    .features-grid {
+      max-width: 1100px; margin: 0 auto;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 24px;
+    }
+
+    .feature-card {
+      padding: 32px;
+      border: 1px solid rgba(0,212,255,0.1);
+      border-radius: 4px;
+      background: rgba(0,5,15,0.6);
+      transition: all 0.3s;
+    }
+
+    .feature-card:hover {
+      border-color: var(--azul);
+      transform: translateY(-4px);
+      box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+    }
+
+    .feature-icone { font-size: 32px; margin-bottom: 16px; }
+
+    .feature-titulo {
+      font-size: 17px; font-weight: 600;
+      color: #fff; margin-bottom: 10px;
+    }
+
+    .feature-desc {
+      font-size: 13px; color: rgba(255,255,255,0.4);
+      line-height: 1.7;
+    }
+
+    /* ── PARA QUEM ── */
+    .paraquem {
+      padding: 100px 20px;
+      max-width: 1100px; margin: 0 auto;
+    }
+
+    .publicos {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px; margin-top: 64px;
+    }
+
+    .publico {
+      padding: 32px 24px;
+      border: 1px solid rgba(0,212,255,0.08);
+      border-top: 3px solid var(--azul);
+      background: rgba(0,10,20,0.6);
+      text-align: center;
+      transition: all 0.2s;
+    }
+
+    .publico:hover { border-top-color: var(--verde); }
+    .publico:nth-child(2) { border-top-color: var(--verde); }
+    .publico:nth-child(3) { border-top-color: var(--laranja); }
+
+    .publico-icone { font-size: 40px; margin-bottom: 16px; }
+
+    .publico-titulo {
+      font-size: 16px; font-weight: 600;
+      color: #fff; margin-bottom: 8px;
+    }
+
+    .publico-desc {
+      font-size: 12px; color: rgba(255,255,255,0.4);
+      line-height: 1.6;
+    }
+
+    /* ── CTA FINAL ── */
+    .cta-final {
+      padding: 120px 20px;
+      text-align: center;
+      position: relative; overflow: hidden;
+    }
+
+    .cta-final::before {
+      content: '';
+      position: absolute; inset: 0;
+      background: radial-gradient(ellipse at center, rgba(0,212,255,0.05) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .cta-titulo {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: clamp(40px, 8vw, 80px);
+      letter-spacing: 2px; color: #fff;
+      margin-bottom: 20px;
+    }
+
+    .cta-sub {
+      font-size: 16px; color: rgba(255,255,255,0.4);
+      max-width: 500px; margin: 0 auto 48px;
+      line-height: 1.7;
+    }
+
+    /* ── FOOTER ── */
+    footer {
+      padding: 40px;
+      border-top: 1px solid rgba(0,212,255,0.08);
+      display: flex; align-items: center; justify-content: space-between;
+      flex-wrap: wrap; gap: 16px;
+    }
+
+    .footer-logo {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 18px; letter-spacing: 4px; color: var(--azul);
+    }
+    .footer-logo span { color: var(--verde); }
+
+    .footer-txt {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 10px; color: rgba(255,255,255,0.2);
+      letter-spacing: 2px;
+    }
+
+    /* ── ANIMAÇÃO DE SCROLL ── */
+    .reveal {
+      opacity: 0; transform: translateY(30px);
+      transition: opacity 0.7s ease, transform 0.7s ease;
+    }
+    .reveal.visivel {
+      opacity: 1; transform: translateY(0);
+    }
+
+    /* ── SCANNER HERO ── */
+    .hero-visual {
+      margin: 60px auto 0;
+      width: 100%; max-width: 500px;
+      height: 200px;
+      border: 1px solid rgba(0,212,255,0.2);
+      border-radius: 8px;
+      background: rgba(0,5,15,0.8);
+      position: relative; overflow: hidden;
+      animation: entrar 0.8s ease 0.8s forwards;
+      opacity: 0;
+    }
+
+    .hero-visual-linha {
+      position: absolute; left: 0; right: 0; height: 2px;
+      background: linear-gradient(90deg, transparent, var(--verde), transparent);
+      animation: scan 2.5s ease-in-out infinite;
+    }
+
+    @keyframes scan {
+      0%   { top: 0; opacity: 0; }
+      10%  { opacity: 1; }
+      90%  { opacity: 1; }
+      100% { top: 100%; opacity: 0; }
+    }
+
+    .hero-visual-bars {
+      position: absolute; bottom: 0; left: 0; right: 0;
+      display: flex; align-items: flex-end;
+      gap: 3px; padding: 0 20px 20px;
+      height: 100%;
+    }
+
+    .hero-bar {
+      flex: 1; border-radius: 2px 2px 0 0;
+      background: var(--azul); opacity: 0.4;
+      animation: pulsar-bar ease-in-out infinite;
+    }
+
+    @keyframes pulsar-bar {
+      0%, 100% { height: 20%; opacity: 0.3; }
+      50%       { height: var(--h); opacity: 0.8; }
+    }
+
+    .hero-visual-label {
+      position: absolute; top: 12px; left: 16px;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 9px; color: var(--verde);
+      letter-spacing: 2px;
+    }
+
+    .hero-visual-freq {
+      position: absolute; top: 12px; right: 16px;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 9px; color: rgba(0,212,255,0.5);
+      letter-spacing: 1px;
+    }
+
+    @media (max-width: 600px) {
+      nav { padding: 16px 20px; }
+      .metrica { min-width: 120px; padding: 30px 12px; }
+      footer { flex-direction: column; text-align: center; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Partículas -->
+<div id="particulas"></div>
+<div class="grade"></div>
+
+<!-- Nav -->
+<nav>
+  <div class="nav-logo">Motor<span>Scan</span> AI</div>
+  <a href="/app.html" class="nav-btn">ACESSAR APP</a>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-badge">DIAGNÓSTICO AUTOMOTIVO COM INTELIGÊNCIA ARTIFICIAL</div>
+
+  <h1 class="hero-titulo">
+    SEU CARRO<br>
+    <span class="destaque">FALA.</span><br>
+    VOCÊ ENTENDE.
+  </h1>
+
+  <p class="hero-sub">
+    Aproxime o celular do motor, grave o som e receba um diagnóstico técnico em segundos — antes de ir à oficina.
+  </p>
+
+  <div class="hero-cta">
+    <a href="/app.html" class="btn-primary">DIAGNOSTICAR AGORA</a>
+    <a href="#como-funciona" class="btn-secondary">COMO FUNCIONA</a>
+  </div>
+
+  <!-- Visual de espectrograma simulado -->
+  <div class="hero-visual">
+    <div class="hero-visual-label">⬤ ANALISANDO FREQUÊNCIAS</div>
+    <div class="hero-visual-freq" id="freqDisplay">--- Hz</div>
+    <div class="hero-visual-linha"></div>
+    <div class="hero-visual-bars" id="bars"></div>
+  </div>
+</section>
+
+<!-- MÉTRICAS -->
+<section class="metricas">
+  <div class="metrica reveal">
+    <div class="metrica-num">6</div>
+    <div class="metrica-label">PADRÕES DE FALHA</div>
+  </div>
+  <div class="metrica reveal">
+    <div class="metrica-num">15s</div>
+    <div class="metrica-label">TEMPO DE ANÁLISE</div>
+  </div>
+  <div class="metrica reveal">
+    <div class="metrica-num">100%</div>
+    <div class="metrica-label">GRATUITO</div>
+  </div>
+  <div class="metrica reveal">
+    <div class="metrica-num">IA</div>
+    <div class="metrica-label">GEMINI POWERED</div>
+  </div>
+</section>
+
+<!-- COMO FUNCIONA -->
+<section class="como" id="como-funciona">
+  <div class="secao-label">PROCESSO</div>
+  <h2 class="secao-titulo reveal">COMO FUNCIONA</h2>
+
+  <div class="passos">
+    <div class="passo reveal">
+      <div class="passo-num">01</div>
+      <div class="passo-icone">🚗</div>
+      <div class="passo-titulo">Ligue o motor</div>
+      <div class="passo-desc">Abra o app no celular e aproxime do motor do seu veículo com ele ligado.</div>
+    </div>
+    <div class="passo reveal">
+      <div class="passo-num">02</div>
+      <div class="passo-icone">🎙️</div>
+      <div class="passo-titulo">Grave o som</div>
+      <div class="passo-desc">O microfone captura as frequências do motor em tempo real pelo espectrograma.</div>
+    </div>
+    <div class="passo reveal">
+      <div class="passo-num">03</div>
+      <div class="passo-icone">🤖</div>
+      <div class="passo-titulo">IA analisa</div>
+      <div class="passo-desc">O Gemini AI identifica padrões acústicos e cruza com a base de falhas mecânicas.</div>
+    </div>
+    <div class="passo reveal">
+      <div class="passo-num">04</div>
+      <div class="passo-icone">📋</div>
+      <div class="passo-titulo">Receba o relatório</div>
+      <div class="passo-desc">Diagnóstico técnico com causa, urgência e o que pedir ao mecânico — em segundos.</div>
+    </div>
+  </div>
+</section>
+
+<!-- FEATURES -->
+<section class="features">
+  <div class="secao-label" style="text-align:center;">RECURSOS</div>
+  <h2 class="secao-titulo reveal">O QUE O APP FAZ</h2>
+
+  <div class="features-grid">
+    <div class="feature-card reveal">
+      <div class="feature-icone">🚗</div>
+      <div class="feature-titulo">Gêmeo Digital 3D</div>
+      <div class="feature-desc">Modelo 3D do seu veículo navegável com pontos de diagnóstico interativos. Veja exatamente onde está o problema.</div>
+    </div>
+    <div class="feature-card reveal">
+      <div class="feature-icone">📊</div>
+      <div class="feature-titulo">Espectrograma em Tempo Real</div>
+      <div class="feature-desc">Visualize as frequências do motor em tempo real. A IA detecta padrões invisíveis ao ouvido humano.</div>
+    </div>
+    <div class="feature-card reveal">
+      <div class="feature-icone">🧠</div>
+      <div class="feature-titulo">Diagnóstico por Sintomas</div>
+      <div class="feature-desc">Sem microfone? Informe os sintomas e a IA cruza com centenas de padrões de falha conhecidos.</div>
+    </div>
+    <div class="feature-card reveal">
+      <div class="feature-icone">📁</div>
+      <div class="feature-titulo">Prontuário do Veículo</div>
+      <div class="feature-desc">Histórico completo de todas as análises. Monitore a saúde do seu carro ao longo do tempo.</div>
+    </div>
+    <div class="feature-card reveal">
+      <div class="feature-icone">📲</div>
+      <div class="feature-titulo">Compartilhe o Diagnóstico</div>
+      <div class="feature-desc">Envie o relatório técnico pelo WhatsApp direto para o mecânico. Chegue informado e evite cobranças indevidas.</div>
+    </div>
+    <div class="feature-card reveal">
+      <div class="feature-icone">🔒</div>
+      <div class="feature-titulo">100% Gratuito</div>
+      <div class="feature-desc">Sem cadastro, sem pagamento, sem pegadinha. Roda direto no navegador do celular — sem instalar nada.</div>
+    </div>
+  </div>
+</section>
+
+<!-- PARA QUEM -->
+<section class="paraquem">
+  <div class="secao-label" style="text-align:center;">PÚBLICO</div>
+  <h2 class="secao-titulo reveal">FEITO PARA QUEM</h2>
+
+  <div class="publicos">
+    <div class="publico reveal">
+      <div class="publico-icone">👤</div>
+      <div class="publico-titulo">Dono de veículo</div>
+      <div class="publico-desc">Chegue na oficina sabendo o que tem o carro. Evite cobranças desnecessárias.</div>
+    </div>
+    <div class="publico reveal">
+      <div class="publico-icone">🚕</div>
+      <div class="publico-titulo">Motoristas de app</div>
+      <div class="publico-desc">Seu carro é sua renda. Monitore a saúde do motor diariamente e evite surpresas.</div>
+    </div>
+    <div class="publico reveal">
+      <div class="publico-icone">🔧</div>
+      <div class="publico-titulo">Mecânicos</div>
+      <div class="publico-desc">Receba clientes com pré-diagnóstico. Agilize o atendimento e aumente a confiança.</div>
+    </div>
+    <div class="publico reveal">
+      <div class="publico-icone">🏢</div>
+      <div class="publico-titulo">Frotas</div>
+      <div class="publico-desc">Monitore dezenas de veículos com prontuário individual e histórico completo.</div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA FINAL -->
+<section class="cta-final">
+  <h2 class="cta-titulo reveal">SEU MOTOR<br>ESTÁ BEM?</h2>
+  <p class="cta-sub reveal">Descubra agora em 15 segundos. Gratuito, sem cadastro, direto no celular.</p>
+  <a href="/app.html" class="btn-primary reveal">DIAGNOSTICAR AGORA — GRÁTIS</a>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-logo">Motor<span>Scan</span> AI</div>
+  <div class="footer-txt">© 2025 MOTORSCAN AI — DIAGNÓSTICO AUTOMOTIVO INTELIGENTE</div>
+  <div class="footer-txt">motorescanai.com.br</div>
+</footer>
+
+<script>
+// ── Partículas ──
+const cont = document.getElementById("particulas");
+for (let i = 0; i < 40; i++) {
+  const p = document.createElement("div");
+  p.className = "particula";
+  p.style.left = Math.random() * 100 + "%";
+  p.style.animationDuration = (8 + Math.random() * 12) + "s";
+  p.style.animationDelay = (Math.random() * 10) + "s";
+  p.style.width = p.style.height = (1 + Math.random() * 2) + "px";
+  if (Math.random() > 0.7) p.style.background = "var(--verde)";
+  cont.appendChild(p);
+}
+
+// ── Barras do espectrograma hero ──
+const barsEl = document.getElementById("bars");
+const numBars = 60;
+const bars = [];
+for (let i = 0; i < numBars; i++) {
+  const b = document.createElement("div");
+  b.className = "hero-bar";
+  const h = 10 + Math.random() * 80;
+  b.style.setProperty("--h", h + "%");
+  b.style.animationDuration = (0.5 + Math.random() * 2) + "s";
+  b.style.animationDelay = (Math.random() * 2) + "s";
+  b.style.height = h + "%";
+  if (i > numBars * 0.7) b.style.background = "var(--verde)";
+  if (i > numBars * 0.85) b.style.background = "var(--laranja)";
+  barsEl.appendChild(b);
+  bars.push(b);
+}
+
+// Frequência animada
+const freqs = ["80 Hz", "240 Hz", "1.2 kHz", "3.4 kHz", "6.8 kHz", "420 Hz"];
+let fi = 0;
+setInterval(() => {
+  document.getElementById("freqDisplay").textContent = freqs[fi++ % freqs.length];
+}, 800);
+
+// ── Scroll reveal ──
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(e => {
+    if (e.isIntersecting) e.target.classList.add("visivel");
+  });
+}, { threshold: 0.1 });
+
+document.querySelectorAll(".reveal").forEach(el => observer.observe(el));
+</script>
+</body>
+</html>
