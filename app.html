@@ -1161,13 +1161,51 @@ function inicializarCanvas3D() {
   animar3d();
 }
 
+// ── Mapeamento de modelos por categoria ──
+const CATEGORIA_VEICULO = {
+  // Hatches
+  "Mobi":"hatch","Argo":"hatch","HB20":"hatch","Gol":"hatch","Polo":"hatch",
+  "Kwid":"hatch","Sandero":"hatch","Ka":"hatch","Fit":"hatch","City":"hatch",
+  "Fox":"hatch","Up":"hatch","March":"hatch",
+  // Sedãs
+  "Cronos":"seda","Onix Plus":"seda","Virtus":"seda","Logan":"seda",
+  "Civic":"seda","Corolla":"seda","Versa":"seda","Sentra":"seda",
+  "Cruze":"seda","Elantra":"seda","HB20S":"seda","Yaris":"seda",
+  // SUVs
+  "Creta":"suv","Tracker":"suv","T-Cross":"suv","Compass":"suv",
+  "Renegade":"suv","HR-V":"suv","WR-V":"suv","Duster":"suv",
+  "Captur":"suv","EcoSport":"suv","Taos":"suv","SW4":"suv",
+  "RAV4":"suv","CR-V":"suv","Tucson":"suv","Santa Fe":"suv",
+  "Territory":"suv","Commander":"suv",
+  // Camionetes
+  "S-10":"pickup","Hilux":"pickup","Ranger":"pickup","Amarok":"pickup",
+  "Toro":"pickup","Oroch":"pickup","Saveiro":"pickup","Montana":"pickup",
+  "Maverick":"pickup","Gladiator":"pickup","Frontier":"pickup","Strada":"pickup"
+};
+
+const CORES_HEX = {
+  "Branco":0xf0f0f0, "Preto":0x111111, "Prata":0xaaaaaa,
+  "Cinza":0x666666, "Vermelho":0xcc2200, "Azul":0x1155cc,
+  "Verde":0x117722, "Amarelo":0xddaa00, "Outra":0x334455
+};
+
+function getCategoriaVeiculo() {
+  const v = JSON.parse(localStorage.getItem("motorscanVeiculo") || "null");
+  if (!v) return { categoria:"hatch", cor:0x001a2e, corNome:"Padrão" };
+  const categoria = CATEGORIA_VEICULO[v.modelo] || "hatch";
+  const cor = CORES_HEX[v.cor] || 0x001a2e;
+  return { categoria, cor, modelo: v.modelo, marca: v.marca };
+}
+
 function construirCarro() {
-  const mS = new THREE.MeshPhongMaterial({color:0x001a2e,transparent:true,opacity:.7,shininess:100,specular:0x00d4ff});
-  const mW = new THREE.MeshBasicMaterial({color:0x00d4ff,wireframe:true,transparent:true,opacity:.12});
-  const mV = new THREE.MeshPhongMaterial({color:0x00d4ff,transparent:true,opacity:.1,shininess:200});
-  const mM = new THREE.MeshPhongMaterial({color:0x00ff9d,transparent:true,opacity:.6,shininess:150,emissive:0x002200});
-  const mC = new THREE.MeshPhongMaterial({color:0xffaa00,transparent:true,opacity:.8,shininess:80});
-  const mF = new THREE.MeshPhongMaterial({color:0xff4444,transparent:true,opacity:.7,shininess:120,emissive:0x220000});
+  const { categoria, cor } = getCategoriaVeiculo();
+
+  const mS = new THREE.MeshPhongMaterial({color:cor, transparent:true, opacity:.75, shininess:120, specular:0x00d4ff});
+  const mW = new THREE.MeshBasicMaterial({color:0x00d4ff, wireframe:true, transparent:true, opacity:.12});
+  const mV = new THREE.MeshPhongMaterial({color:0x00d4ff, transparent:true, opacity:.1, shininess:200});
+  const mM = new THREE.MeshPhongMaterial({color:0x00ff9d, transparent:true, opacity:.6, shininess:150, emissive:0x002200});
+  const mC = new THREE.MeshPhongMaterial({color:0xffaa00, transparent:true, opacity:.8, shininess:80});
+  const mF = new THREE.MeshPhongMaterial({color:0xff4444, transparent:true, opacity:.7, shininess:120, emissive:0x220000});
 
   const add = (geo,mat,x,y,z,rx=0,ry=0,rz=0) => {
     const m = new THREE.Mesh(geo,mat);
@@ -1175,47 +1213,102 @@ function construirCarro() {
     grupoCarro.add(m); return m;
   };
 
-  // Carroceria
-  const gC = new THREE.BoxGeometry(2.2,.6,4.5,3,2,6);
-  add(gC,mS,0,.5,0); add(gC,mW,0,.5,0);
-  const gCab = new THREE.BoxGeometry(1.8,.7,2.2,2,2,4);
-  add(gCab,mS,0,1.15,-.1); add(gCab,mW,0,1.15,-.1);
+  // Dimensões por categoria
+  const dim = {
+    hatch:  { compCorpo:3.8, altCab:.65, compCab:1.8, posCapo:1.2, largura:2.0 },
+    seda:   { compCorpo:4.5, altCab:.60, compCab:2.0, posCapo:1.5, largura:2.1 },
+    suv:    { compCorpo:4.2, altCab:.85, compCab:2.1, posCapo:1.4, largura:2.2 },
+    pickup: { compCorpo:5.2, altCab:.60, compCab:1.6, posCapo:1.8, largura:2.3 }
+  };
+
+  const d = dim[categoria] || dim.hatch;
+
+  // Carroceria principal
+  add(new THREE.BoxGeometry(d.largura,.6,d.compCorpo,3,2,6), mS, 0,.5,0);
+  add(new THREE.BoxGeometry(d.largura,.6,d.compCorpo,3,2,6), mW, 0,.5,0);
+
+  // Cabine
+  const cabX = categoria === 'pickup' ? -0.5 : -0.1;
+  add(new THREE.BoxGeometry(d.largura*.85, d.altCab, d.compCab,2,2,4), mS, 0, .5+d.altCab/2+.3, cabX);
+  add(new THREE.BoxGeometry(d.largura*.85, d.altCab, d.compCab,2,2,4), mW, 0, .5+d.altCab/2+.3, cabX);
+
+  // Caçamba para pickup
+  if (categoria === 'pickup') {
+    add(new THREE.BoxGeometry(d.largura*.9, .5, 1.8), mS, 0, .75, 1.5);
+    add(new THREE.BoxGeometry(d.largura*.9, .5, 1.8), mW, 0, .75, 1.5);
+  }
+
   // Para-brisas
-  const gPB = new THREE.PlaneGeometry(1.7,.75);
-  add(gPB,mV,0,1.05,.97,-.35,0,0);
-  add(gPB,mV,0,1.05,-1.15,.35,0,0);
+  add(new THREE.PlaneGeometry(d.largura*.8,.75), mV, 0, .5+d.altCab*.4+.3, cabX+(d.compCab/2)*.85, -.3,0,0);
+  add(new THREE.PlaneGeometry(d.largura*.8,.75), mV, 0, .5+d.altCab*.4+.3, cabX-(d.compCab/2)*.85, .3,0,0);
+
   // Capô
-  const gCap = new THREE.BoxGeometry(2.1,.08,1.6,3,1,4);
-  add(gCap,mS,0,.84,1.5); add(gCap,mW,0,.84,1.5);
+  add(new THREE.BoxGeometry(d.largura*.95,.08,1.6,3,1,4), mS, 0,.84,d.posCapo);
+  add(new THREE.BoxGeometry(d.largura*.95,.08,1.6,3,1,4), mW, 0,.84,d.posCapo);
+
   // Motor
-  add(new THREE.BoxGeometry(1.4,.5,1.1,3,2,3),mM,0,.45,1.5);
-  [.4,.13,-.13,-.4].forEach(x=>add(new THREE.CylinderGeometry(.12,.12,.4,8),mM,x,.72,1.2));
+  add(new THREE.BoxGeometry(1.4,.5,1.1,3,2,3), mM, 0,.45,d.posCapo);
+  [.4,.13,-.13,-.4].forEach(x=>add(new THREE.CylinderGeometry(.12,.12,.4,8),mM,x,.72,d.posCapo-.3));
+
   // Correia
-  add(new THREE.TorusGeometry(.35,.035,8,32),mC,.85,.65,1.2,0,Math.PI/2,0);
-  add(new THREE.CylinderGeometry(.12,.12,.05,16),new THREE.MeshPhongMaterial({color:0x888888,shininess:200}),.85,.65,1.2,Math.PI/2,0,0);
+  add(new THREE.TorusGeometry(.35,.035,8,32), mC, .85,.65,d.posCapo-.3, 0,Math.PI/2,0);
+
   // Escape
-  add(new THREE.CylinderGeometry(.05,.07,3.5,8),new THREE.MeshPhongMaterial({color:0x555555}),-.6,.1,-.2,Math.PI/2,0,0);
-  // Rodas + freios
-  [[1.1,-.25,1.6],[-1.1,-.25,1.6],[1.1,-.25,-1.6],[-1.1,-.25,-1.6]].forEach(([x,y,z])=>{
-    add(new THREE.TorusGeometry(.38,.16,12,24),new THREE.MeshPhongMaterial({color:0x111111}),x,y,z,0,Math.PI/2,0);
-    add(new THREE.CylinderGeometry(.3,.3,.05,16),new THREE.MeshPhongMaterial({color:0xcccccc,shininess:300}),x,y,z,Math.PI/2,0,0);
-    add(new THREE.CylinderGeometry(.22,.22,.03,16),mF,x*.92,y,z,Math.PI/2,0,0);
+  add(new THREE.CylinderGeometry(.05,.07,d.compCorpo*.7,8), new THREE.MeshPhongMaterial({color:0x555555}), -.6,.1,0, Math.PI/2,0,0);
+
+  // Rodas — posição por categoria
+  const posRodas = categoria === 'pickup'
+    ? [[d.largura/2+.05,-.25,d.compCorpo/2-.5],[-d.largura/2-.05,-.25,d.compCorpo/2-.5],[d.largura/2+.05,-.25,-d.compCorpo/2+.5],[-d.largura/2-.05,-.25,-d.compCorpo/2+.5]]
+    : [[d.largura/2+.05,-.25,d.compCorpo/2-.7],[-d.largura/2-.05,-.25,d.compCorpo/2-.7],[d.largura/2+.05,-.25,-d.compCorpo/2+.7],[-d.largura/2-.05,-.25,-d.compCorpo/2+.7]];
+
+  const raioPneu = categoria === 'suv' || categoria === 'pickup' ? .42 : .36;
+
+  posRodas.forEach(([x,y,z])=>{
+    add(new THREE.TorusGeometry(raioPneu,.16,12,24), new THREE.MeshPhongMaterial({color:0x111111}), x,y,z, 0,Math.PI/2,0);
+    add(new THREE.CylinderGeometry(raioPneu*.8,raioPneu*.8,.05,16), new THREE.MeshPhongMaterial({color:0xcccccc,shininess:300}), x,y,z, Math.PI/2,0,0);
+    add(new THREE.CylinderGeometry(.22,.22,.03,16), mF, x*.92,y,z, Math.PI/2,0,0);
   });
+
   // Suspensão
-  [[.9,-.1,1.6],[-.9,-.1,1.6],[.9,-.1,-1.6],[-.9,-.1,-1.6]].forEach(([x,y,z])=>{
+  posRodas.forEach(([x,y,z])=>{
     const mSusp = new THREE.MeshPhongMaterial({color:0x4488ff});
-    add(new THREE.TorusGeometry(.12,.025,6,12),mSusp,x,y,z);
-    add(new THREE.CylinderGeometry(.03,.03,.4,8),mSusp,x,y-.1,z);
+    add(new THREE.TorusGeometry(.12,.025,6,12), mSusp, x*.85,y,z);
+    add(new THREE.CylinderGeometry(.03,.03,.4,8), mSusp, x*.85,y-.1,z);
   });
-  // Para-choques e faróis
-  add(new THREE.BoxGeometry(2.2,.35,.15),mS,0,.25,2.33);
-  add(new THREE.BoxGeometry(2.2,.3,.15),mS,0,.25,-2.33);
+
+  // Para-choques
+  add(new THREE.BoxGeometry(d.largura+.1,.35,.15), mS, 0,.25,d.compCorpo/2+.08);
+  add(new THREE.BoxGeometry(d.largura+.1,.3,.15), mS, 0,.25,-d.compCorpo/2-.08);
+
+  // Faróis
   const mFar = new THREE.MeshPhongMaterial({color:0xffffaa,emissive:0x444400});
-  [[-.75,.55,2.3],[.75,.55,2.3]].forEach(p=>add(new THREE.BoxGeometry(.5,.18,.08),mFar,...p));
+  [[-(d.largura/2-.25),.55,d.compCorpo/2+.05],[(d.largura/2-.25),.55,d.compCorpo/2+.05]].forEach(p=>add(new THREE.BoxGeometry(.5,.18,.08),mFar,...p));
   const mLan = new THREE.MeshPhongMaterial({color:0xff2200,emissive:0x330000});
-  [[-.75,.55,-2.3],[.75,.55,-2.3]].forEach(p=>add(new THREE.BoxGeometry(.5,.18,.08),mLan,...p));
+  [[-(d.largura/2-.25),.55,-d.compCorpo/2-.05],[(d.largura/2-.25),.55,-d.compCorpo/2-.05]].forEach(p=>add(new THREE.BoxGeometry(.5,.18,.08),mLan,...p));
+
   // Chassis wireframe
-  add(new THREE.BoxGeometry(2,.08,4.2,4,1,8),new THREE.MeshBasicMaterial({color:0x00d4ff,wireframe:true,transparent:true,opacity:.06}),0,-.04,0);
+  add(new THREE.BoxGeometry(d.largura*.9,.08,d.compCorpo*.95,4,1,8), new THREE.MeshBasicMaterial({color:0x00d4ff,wireframe:true,transparent:true,opacity:.06}), 0,-.04,0);
+
+  // Atualiza painel com nome do veículo
+  atualizarPainelVeiculo3D();
+}
+
+function atualizarPainelVeiculo3D() {
+  const v = JSON.parse(localStorage.getItem("motorscanVeiculo") || "null");
+  const el = document.getElementById("painelVeiculo");
+  if (el && v) {
+    el.innerHTML = `<div class="painel-nome" style="color:var(--verde);">${v.marca} ${v.modelo}</div>
+    <div class="painel-hz">${v.ano}${v.cor ? ' · ' + v.cor : ''}</div>`;
+  }
+}
+
+function recarregarCarro() {
+  // Remove o carro atual e reconstrói com novo modelo
+  while(grupoCarro.children.length > 0) {
+    grupoCarro.remove(grupoCarro.children[0]);
+  }
+  construirCarro();
+  quatCarro.identity();
 }
 
 const infoPecas = {
@@ -1997,6 +2090,8 @@ function salvarVeiculo() {
   const veiculo = { marca, modelo, ano, cor };
   localStorage.setItem("motorscanVeiculo", JSON.stringify(veiculo));
   atualizarPainelVeiculo(veiculo);
+  // Recarrega o modelo 3D com a nova categoria e cor
+  if (grupoCarro) recarregarCarro();
   alert(`✅ ${marca} ${modelo} ${ano} salvo com sucesso!`);
   irPara("t-home");
 }
