@@ -802,6 +802,22 @@
     <!-- Aviso -->
     <div class="aviso-box">⚠️ Orientação preliminar — confirme sempre com um profissional habilitado</div>
 
+    <!-- Confirmação do diagnóstico — Data Flywheel -->
+    <div style="background:rgba(0,10,20,.9);border:1px solid rgba(0,212,255,.15);border-radius:8px;padding:14px;text-align:center;">
+      <div style="font-size:10px;color:rgba(255,255,255,.4);letter-spacing:2px;margin-bottom:10px;">APÓS VISITAR A OFICINA</div>
+      <div style="font-size:13px;color:rgba(255,255,255,.7);margin-bottom:12px;">O diagnóstico estava correto?</div>
+      <div style="display:flex;gap:8px;">
+        <button onclick="confirmarDiagnostico(true)"
+          style="flex:1;padding:10px;border-radius:4px;border:1px solid var(--verde);background:rgba(0,255,157,.08);color:var(--verde);font-family:'Rajdhani',sans-serif;font-size:12px;font-weight:600;letter-spacing:2px;cursor:pointer;">
+          ✅ CONFIRMOU!
+        </button>
+        <button onclick="confirmarDiagnostico(false)"
+          style="flex:1;padding:10px;border-radius:4px;border:1px solid var(--vermelho);background:rgba(239,68,68,.08);color:var(--vermelho);font-family:'Rajdhani',sans-serif;font-size:12px;font-weight:600;letter-spacing:2px;cursor:pointer;">
+          ❌ NÃO ESTAVA
+        </button>
+      </div>
+    </div>
+
     <!-- Botões de compartilhamento -->
     <div style="display:flex;gap:10px;">
       <button class="btn-resultado" style="flex:1;background:rgba(37,211,102,.1);border-color:#25d366;color:#25d366;font-size:13px;"
@@ -1939,6 +1955,34 @@ async function chamarGemini(payload, tentativa=1) {
     }
     console.warn("Gemini indisponível:", e);
     return null;
+  }
+}
+
+// ════════════════════════════════
+// DATA FLYWHEEL — CONFIRMAÇÃO
+// ════════════════════════════════
+function confirmarDiagnostico(correto) {
+  const d = diagAtual;
+  if (!d) return;
+
+  const FORMS_URL = "https://docs.google.com/forms/d/e/1FAIpQLSe2fO4E-dc--4bBnZ1Woyb6TxDPrPqpcFdo9E8vewueotumFw/viewform?usp=header";
+
+  if (correto) {
+    // Abre o Forms com mensagem de parabéns
+    alert("🎉 Ótimo! Obrigado pela confirmação!\n\nResponda 3 perguntas rápidas e ganhe o Check-list de Manutenção Preventiva gratuito!");
+    window.open(FORMS_URL, "_blank");
+  } else {
+    // Abre o Forms para coletar o erro
+    alert("Obrigado por nos avisar! Seu feedback é muito importante para melhorarmos a IA.\n\nConte-nos o que o mecânico encontrou de verdade:");
+    window.open(FORMS_URL, "_blank");
+  }
+
+  // Salva localmente também
+  const historico = JSON.parse(localStorage.getItem("motorscanHistorico") || "[]");
+  if (historico.length > 0) {
+    historico[0].confirmado = correto;
+    historico[0].dataConfirmacao = new Date().toLocaleDateString();
+    localStorage.setItem("motorscanHistorico", JSON.stringify(historico));
   }
 }
 
