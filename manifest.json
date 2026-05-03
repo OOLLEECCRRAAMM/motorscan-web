@@ -1,16 +1,16 @@
 {
   "short_name": "MotorScan",
   "name": "MotorScan AI — Diagnóstico Automotivo",
-  "description": "Diagnostique seu carro em 15 segundos usando o microfone do celular. Inteligência artificial identificando falhas mecânicas.",
+  "description": "Diagnostique seu carro em 15 segundos usando o microfone do celular.",
   "icons": [
     {
-      "src": "/icon-192x192.png",
+      "src": "/ícone-192x192.png",
       "type": "image/png",
       "sizes": "192x192",
       "purpose": "any maskable"
     },
     {
-      "src": "/icon-512x512.png",
+      "src": "/ícone-512x512.png",
       "type": "image/png",
       "sizes": "512x512",
       "purpose": "any maskable"
