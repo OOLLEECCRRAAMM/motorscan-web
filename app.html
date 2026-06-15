@@ -991,12 +991,28 @@ const nomesLegiveis = {
 };
 
 const BRAIN = {
-  batida_biela:      { nome:"Batida de biela",     fMin:20,   fMax:80,   lim:160, status:"urgente",  msg:"Impacto metálico no conjunto biela-virabrequim.",       rec:"Desligue o motor imediatamente. Risco de falha catastrófica.", icone:"💥" },
-  correia_alternador:{ nome:"Correia do alternador",fMin:1000, fMax:4000, lim:130, status:"atenção",  msg:"Assinatura de correia com tensão irregular.",            rec:"Verifique tensão e estado da correia antes de substituir.", icone:"⚠️" },
-  falha_ignicao:     { nome:"Falha na ignição",     fMin:80,   fMax:200,  lim:120, status:"moderado", msg:"Padrão rítmico irregular — possível misfire.",           rec:"Exija leitura do scanner para identificar o cilindro afetado.", icone:"⚡" },
-  vazamento_escape:  { nome:"Vazamento no escape",  fMin:80,   fMax:300,  lim:110, status:"atenção",  msg:"Perda de pressão no sistema de exaustão.",              rec:"Inspecione o coletor com motor frio. Procure fuligem nas juntas.", icone:"💨" },
-  rolamento:         { nome:"Rolamento desgastado", fMin:4000, fMax:8000, lim:100, status:"atenção",  msg:"Frequência de ressonância de componente rotativo alterada.",rec:"Identifique a origem — roda, alternador ou tensor.", icone:"🔄" },
-  pastilha_freio:    { nome:"Pastilha de freio",    fMin:2000, fMax:6000, lim:140, status:"urgente",  msg:"Indicador de desgaste em contato com disco.",            rec:"Leve ao mecânico imediatamente — peça para ver as pastilhas.", icone:"🛑" }
+  // ── MOTOR ──
+  batida_biela:      { nome:"Batida de biela",        fMin:20,   fMax:80,   lim:160, status:"urgente",  msg:"Impacto metálico no conjunto biela-virabrequim.",            rec:"Desligue o motor imediatamente. Risco de falha catastrófica.", icone:"💥" },
+  falha_ignicao:     { nome:"Falha na ignição",        fMin:80,   fMax:200,  lim:120, status:"moderado", msg:"Padrão rítmico irregular — possível misfire.",               rec:"Exija leitura do scanner para identificar o cilindro afetado.", icone:"⚡" },
+  valvula_folga:     { nome:"Válvula com folga",       fMin:200,  fMax:600,  lim:115, status:"moderado", msg:"Tique metálico rítmico — tuchos ou válvulas desregulados.",   rec:"Solicite regulagem de válvulas. Evite longas distâncias.", icone:"🔩" },
+  coxim_motor:       { nome:"Coxim do motor",          fMin:30,   fMax:120,  lim:125, status:"atenção",  msg:"Vibração irregular do bloco — suporte do motor comprometido.",rec:"Solicite inspeção dos coxins. Peça para ver o desgaste.", icone:"📳" },
+  injetor_falha:     { nome:"Injetor com defeito",     fMin:600,  fMax:1200, lim:118, status:"moderado", msg:"Pulso irregular de injeção — possível entupimento.",           rec:"Peça teste de vazão dos injetores antes de autorizar troca.", icone:"⛽" },
+  // ── CORREIA / TRANSMISSÃO ──
+  correia_alternador:{ nome:"Correia do alternador",   fMin:1000, fMax:4000, lim:130, status:"atenção",  msg:"Assinatura de correia com tensão irregular.",                rec:"Verifique tensão e estado da correia antes de substituir.", icone:"⚠️" },
+  correia_dentada:   { nome:"Correia dentada",         fMin:500,  fMax:1500, lim:122, status:"urgente",  msg:"Ruído metálico rítmico — tensão ou desgaste crítico.",        rec:"Não dirija. Ruptura pode destruir o motor completamente.", icone:"🔴" },
+  junta_homocinetica:{ nome:"Junta homocinética",      fMin:150,  fMax:500,  lim:120, status:"moderado", msg:"Estalo em curvas — junta CV com desgaste avançado.",           rec:"Solicite inspeção da coifa e da junta. Troque se necessário.", icone:"🔧" },
+  // ── FREIOS ──
+  pastilha_freio:    { nome:"Pastilha de freio",       fMin:2000, fMax:6000, lim:140, status:"urgente",  msg:"Indicador de desgaste em contato com disco.",                rec:"Leve ao mecânico imediatamente — peça para ver as pastilhas.", icone:"🛑" },
+  disco_empenado:    { nome:"Disco de freio empenado", fMin:300,  fMax:900,  lim:125, status:"moderado", msg:"Vibração pulsante ao frear — disco fora de plano.",            rec:"Peça medição com relógio comparador antes de autorizar retífica.", icone:"🔵" },
+  // ── SUSPENSÃO / DIREÇÃO ──
+  amortecedor:       { nome:"Amortecedor desgastado",  fMin:5,    fMax:30,   lim:130, status:"moderado", msg:"Ruído surdo em irregularidades — amortecedor sem pressão.",   rec:"Teste: carro não deve oscilar mais de 1 vez após solavanco.", icone:"🚗" },
+  barra_estabiliz:   { nome:"Barra estabilizadora",    fMin:50,   fMax:200,  lim:118, status:"atenção",  msg:"Estalos ao fazer curvas — bucha ou terminal desgastado.",     rec:"Solicite inspeção das buchas e terminais da barra.", icone:"📐" },
+  // ── ESCAPE / ARREFECIMENTO ──
+  vazamento_escape:  { nome:"Vazamento no escape",     fMin:80,   fMax:300,  lim:110, status:"atenção",  msg:"Perda de pressão no sistema de exaustão.",                   rec:"Inspecione o coletor com motor frio. Procure fuligem nas juntas.", icone:"💨" },
+  superaquecimento:  { nome:"Superaquecimento",         fMin:20,   fMax:60,   lim:105, status:"urgente",  msg:"Fervura do líquido de arrefecimento detectada.",              rec:"Desligue o motor. Não abra o radiador quente. Chame socorro.", icone:"🌡️" },
+  // ── ALTERNADOR / ELÉTRICO ──
+  rolamento:         { nome:"Rolamento desgastado",    fMin:4000, fMax:8000, lim:100, status:"atenção",  msg:"Frequência de ressonância de componente rotativo alterada.",  rec:"Identifique a origem — roda, alternador ou tensor.", icone:"🔄" },
+  alternador_falha:  { nome:"Alternador com defeito",  fMin:3000, fMax:7000, lim:112, status:"moderado", msg:"Zumbido elétrico — alternador com rolamento ou diodo ruim.",  rec:"Peça teste de tensão de carga. Valor normal: 13,8V a 14,4V.", icone:"🔋" }
 };
 
 // ════════════════════════════════
@@ -1524,13 +1540,24 @@ async function analisarAudioGravado() {
 // SINTOMAS MANUAIS
 // ════════════════════════════════
 const diagSintomas = [
+  // ── MOTOR ──
   {problema:"Chiado ao ligar",causa:"Correia do alternador desgastada",status:"atenção",rec:"Verifique tensão e estado da correia antes de substituir.",sinRel:["chiado_motor","dificuldade_partida"],combFort:[["chiado_motor","dificuldade_partida"]]},
-  {problema:"Vibração em baixa rotação",causa:"Suporte do motor comprometido",status:"atenção",rec:"Solicite inspeção dos coxins do motor.",sinRel:["vibracao","chiado_motor"],combFort:[["vibracao","chiado_motor"]]},
-  {problema:"Luz acesa no painel",causa:"Falha no sistema eletrônico",status:"moderado",rec:"Exija leitura com scanner e código de falha antes de autorizar serviço.",sinRel:["luz_painel","dificuldade_partida"],combFort:[["luz_painel","dificuldade_partida"]]},
-  {problema:"Barulho ao frear",causa:"Pastilhas de freio desgastadas",status:"urgente",rec:"Leve imediatamente. Peça para ver as pastilhas antes da troca.",sinRel:["barulho_freio","vibracao"],combFort:[["barulho_freio","vibracao"]]},
-  {problema:"Dificuldade para ligar",causa:"Falha na bateria ou ignição",status:"moderado",rec:"Peça teste de carga da bateria. Se boa, avalie ignição.",sinRel:["dificuldade_partida","luz_painel"],combFort:[["dificuldade_partida","luz_painel"]]},
+  {problema:"Vibração em baixa rotação",causa:"Suporte do motor comprometido (coxim)",status:"atenção",rec:"Solicite inspeção dos coxins. Peça para ver o desgaste antes de autorizar troca.",sinRel:["vibracao","chiado_motor"],combFort:[["vibracao","chiado_motor"]]},
+  {problema:"Falha na ignição",causa:"Vela ou bobina com defeito",status:"moderado",rec:"Exija leitura do scanner para identificar o cilindro afetado antes de trocar peças.",sinRel:["vibracao","perda_potencia","consumo_alto"],combFort:[["vibracao","perda_potencia"],["perda_potencia","consumo_alto"]]},
   {problema:"Perda de potência",causa:"Falha no sistema de alimentação",status:"atenção",rec:"Inspecione filtro, injetores e sensor MAF antes de autorizar trocas.",sinRel:["perda_potencia","consumo_alto","vibracao"],combFort:[["perda_potencia","consumo_alto"],["perda_potencia","vibracao"]]},
-  {problema:"Fumaça no escapamento",causa:"Falha de combustão ou desgaste interno",status:"urgente",rec:"Azul=óleo, Branca=junta, Preta=combustível. Anote a cor e informe ao mecânico.",sinRel:["fumaca","consumo_alto","perda_potencia"],combFort:[["fumaca","consumo_alto"],["fumaca","perda_potencia"]]}
+  {problema:"Consumo elevado de combustível",causa:"Injetores sujos ou sensor de oxigênio com defeito",status:"atenção",rec:"Peça diagnóstico eletrônico antes de autorizar limpeza de injetores.",sinRel:["consumo_alto","perda_potencia"],combFort:[["consumo_alto","perda_potencia"]]},
+  // ── FREIOS ──
+  {problema:"Barulho ao frear",causa:"Pastilhas de freio desgastadas",status:"urgente",rec:"Leve imediatamente. Peça para ver as pastilhas antes da troca.",sinRel:["barulho_freio","vibracao"],combFort:[["barulho_freio","vibracao"]]},
+  {problema:"Vibração ao frear",causa:"Disco de freio empenado",status:"moderado",rec:"Peça medição com relógio comparador antes de autorizar retífica ou troca.",sinRel:["barulho_freio","vibracao"],combFort:[["barulho_freio","vibracao"]]},
+  // ── ELÉTRICO / PAINEL ──
+  {problema:"Luz acesa no painel",causa:"Falha no sistema eletrônico",status:"moderado",rec:"Exija leitura com scanner e código de falha antes de autorizar qualquer serviço.",sinRel:["luz_painel","dificuldade_partida"],combFort:[["luz_painel","dificuldade_partida"]]},
+  {problema:"Dificuldade para ligar",causa:"Falha na bateria ou motor de partida",status:"moderado",rec:"Peça teste de carga da bateria. Se boa, avalie o motor de partida e a ignição.",sinRel:["dificuldade_partida","luz_painel"],combFort:[["dificuldade_partida","luz_painel"]]},
+  {problema:"Bateria descarregando",causa:"Alternador com defeito",status:"moderado",rec:"Peça teste de tensão de carga. Valor normal entre 13,8V e 14,4V.",sinRel:["dificuldade_partida","luz_painel","perda_potencia"],combFort:[["dificuldade_partida","luz_painel"]]},
+  // ── ESCAPE / ARREFECIMENTO ──
+  {problema:"Fumaça no escapamento",causa:"Falha de combustão ou desgaste interno",status:"urgente",rec:"Azul=óleo queimando, Branca=junta do cabeçote, Preta=excesso de combustível. Anote a cor.",sinRel:["fumaca","consumo_alto","perda_potencia"],combFort:[["fumaca","consumo_alto"],["fumaca","perda_potencia"]]},
+  {problema:"Superaquecimento do motor",causa:"Falha no sistema de arrefecimento",status:"urgente",rec:"Desligue o motor imediatamente. Não abra o radiador com motor quente. Chame socorro.",sinRel:["perda_potencia","fumaca","luz_painel"],combFort:[["perda_potencia","fumaca"],["perda_potencia","luz_painel"]]},
+  // ── SUSPENSÃO ──
+  {problema:"Barulho na suspensão",causa:"Amortecedor ou bucha desgastados",status:"atenção",rec:"Solicite inspeção da suspensão. Teste de solavanco: carro não deve oscilar mais de 1 vez.",sinRel:["vibracao","barulho_freio"],combFort:[["vibracao","barulho_freio"]]}
 ];
 
 const pesos={fumaca:3,barulho_freio:3,perda_potencia:2,vibracao:2,luz_painel:2,dificuldade_partida:2,consumo_alto:1,chiado_motor:1};
