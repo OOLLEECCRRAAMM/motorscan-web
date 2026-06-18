@@ -533,6 +533,13 @@
 </div>
 
 <div id="setas-nav" style="display:none;">
+  <!-- Dica de uso das setas -->
+  <div style="position:fixed;top:65px;left:50%;transform:translateX(-50%);z-index:20;
+    background:rgba(0,0,0,0.85);border:1px solid var(--azul);border-radius:8px;
+    padding:6px 14px;font-size:11px;color:var(--azul);text-align:center;
+    white-space:nowrap;pointer-events:none;">
+    🧭 Toque em um sistema para inspecionar
+  </div>
   <div class="seta-nav" style="top:35%;left:50%;transform:translateX(-50%);" onclick="voarePara('motor')">
     <div class="seta-circulo">⬆️</div><div class="seta-label">MOTOR</div>
   </div>
@@ -1361,10 +1368,12 @@ async function alternarGravacao() {
     document.getElementById("btnAnalisarAudio").style.display="none";
 
     // Reseta o título e a lista de padrões
-    document.getElementById("tituloDeteccoes").textContent = "Padrões detectados";
+    document.getElementById("tituloDeteccoes").textContent = "🎙️ Gravando...";
     document.getElementById("listaDeteccoes").innerHTML = `
-      <div style="font-size:12px;color:rgba(255,255,255,.2);text-align:center;padding:8px;">
-        Aguardando sinal de áudio...
+      <div style="font-size:13px;color:var(--azul);text-align:center;padding:12px;line-height:1.6;">
+        <div style="font-size:22px;margin-bottom:8px;">🎤</div>
+        <strong>Aproxime o celular do motor</strong><br>
+        <span style="font-size:11px;color:rgba(255,255,255,.4);">Aguarde 15 segundos para melhor análise</span>
       </div>`;
 
     timerGrav = setInterval(()=>{
@@ -1405,7 +1414,7 @@ function pararGravacao() {
   if (temDeteccao) {
     ultimaDeteccaoHTML = deteccaoAtual;
     document.getElementById("listaDeteccoes").innerHTML = ultimaDeteccaoHTML;
-    document.getElementById("tituloDeteccoes").textContent = "✅ Padrões captados na gravação";
+    document.getElementById("tituloDeteccoes").textContent = "✅ Análise concluída — role para ver o resultado";
   } else {
     document.getElementById("tituloDeteccoes").textContent = "Padrões detectados";
     document.getElementById("listaDeteccoes").innerHTML = `
@@ -1483,7 +1492,8 @@ function detectarTempoReal(fft) {
       </div>`;
     }
   }
-  if(!algum) lista.innerHTML=`<div style="font-size:11px;color:rgba(255,255,255,.2);text-align:center;padding:8px;">Aguardando sinal...</div>`;
+  // Durante gravação não mostra padrões — só após parar
+  if(!algum && !estaGravando) lista.innerHTML=`<div style="font-size:11px;color:rgba(255,255,255,.2);text-align:center;padding:8px;">Aguardando sinal...</div>`;
 }
 
 async function analisarAudioGravado() {
