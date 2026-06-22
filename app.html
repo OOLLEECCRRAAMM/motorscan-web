@@ -1499,51 +1499,103 @@ function detectarTempoReal(fft) {
 async function analisarAudioGravado() {
   if (!dadosFFT) return;
 
-  const sr = audioCtx?.sampleRate || 44100;
-  const bs = sr / 2048;
-  let resumoFreq = "Frequências com maior amplitude detectadas:\n";
+  try {
+    const sr = audioCtx?.sampleRate || 44100;
+    const bs = sr / 2048;
+    let resumoFreq = "Frequências com maior amplitude detectadas:\n";
+    let melhorPadrao = null, melhorPct = 0;
 
-  for (const [, f] of Object.entries(BRAIN)) {
-    const bMin = Math.floor(f.fMin / bs);
-    const bMax = Math.ceil(f.fMax / bs);
-    let soma = 0, count = 0;
-    for (let i = bMin; i <= Math.min(bMax, dadosFFT.length - 1); i++) {
-      soma += dadosFFT[i]; count++;
+    for (const [chave, f] of Object.entries(BRAIN)) {
+      const bMin = Math.floor(f.fMin / bs);
+      const bMax = Math.ceil(f.fMax / bs);
+      let soma = 0, count = 0;
+      for (let i = bMin; i <= Math.min(bMax, dadosFFT.length - 1); i++) {
+        soma += dadosFFT[i]; count++;
+      }
+      const media = count > 0 ? soma / count : 0;
+      const pct = Math.round((media / 255) * 100);
+      if (pct > 10) resumoFreq += `- ${f.nome} (${f.fMin}–${f.fMax} Hz): intensidade ${pct}%\n`;
+      if (pct > melhorPct) { melhorPct = pct; melhorPadrao = f; }
     }
-    const media = count > 0 ? soma / count : 0;
-    const pct = Math.round((media / 255) * 100);
-    if (pct > 10) resumoFreq += `- ${f.nome} (${f.fMin}–${f.fMax} Hz): intensidade ${pct}%\n`;
-  }
 
-  origemAudio = true;
-  dadosAnalise = { sintomas: ["análise_acústica"], descricao: `Gravação de ${segsGrav}s` };
-  irParaProcessando();
+    // ── Diagnóstico de fallback local — usado se o Gemini falhar ──
+    let diagFallback;
+    if (melhorPadrao && melhorPct > 15) {
+      diagFallback = {
+        problema: melhorPadrao.nome,
+        causa: melhorPadrao.msg,
+        status: melhorPadrao.status,
+        rec: melhorPadrao.rec,
+        conf: Math.min(melhorPct, 85),
+        base: `Análise acústica local — ${segsGrav}s de gravação`,
+        origemIA: false
+      };
+    } else {
+      diagFallback = {
+        problema: "Sinal insuficiente para diagnóstico preciso",
+        causa: "O áudio captado não apresentou um padrão de frequência claro.",
+        status: "atenção",
+        rec: "Grave novamente mais próximo do motor, com o veículo ligado e o ambiente silencioso.",
+        conf: 30,
+        base: `Análise acústica local — ${segsGrav}s de gravação`,
+        origemIA: false
+      };
+    }
 
-  const veiculo = JSON.parse(localStorage.getItem("motorscanVeiculo") || "null");
-  const diagGemini = await chamarGemini({
-    dadosFrequencia: resumoFreq,
-    sintomas: [],
-    descricao: `Análise acústica de ${segsGrav} segundos de gravação do motor`,
-    veiculo: veiculo ? `${veiculo.marca} ${veiculo.modelo} ${veiculo.ano}` : "não informado"
-  });
+    origemAudio = true;
+    dadosAnalise = { sintomas: ["análise_acústica"], descricao: `Gravação de ${segsGrav}s` };
+    irParaProcessando();
 
-  if (diagGemini) {
+    const veiculo = JSON.parse(localStorage.getItem("motorscanVeiculo") || "null");
+    const diagGemini = await chamarGemini({
+      dadosFrequencia: resumoFreq,
+      sintomas: [],
+      descricao: `Análise acústica de ${segsGrav} segundos de gravação do motor`,
+      veiculo: veiculo ? `${veiculo.marca} ${veiculo.modelo} ${veiculo.ano}` : "não informado"
+    });
+
+    if (diagGemini) {
+      diagAtual = {
+        problema: diagGemini.problema,
+        causa: diagGemini.causa,
+        status: diagGemini.status,
+        rec: diagGemini.recomendacao,
+        conf: diagGemini.confianca,
+        base: `Análise acústica IA — ${segsGrav}s de gravação`,
+        origemIA: true
+      };
+      window._hipoteses = (diagGemini.hipoteses || []).map(h => ({ causa: h.causa, conf: h.confianca }));
+    } else {
+      // Gemini indisponível — usa o fallback local, garantindo que sempre há resultado
+      diagAtual = diagFallback;
+      window._hipoteses = [];
+    }
+
+    clearInterval(window._procInterval);
+    document.getElementById("procBarra").style.width = "100%";
+    document.getElementById("procStatus").textContent = "Relatório gerado!";
+    setTimeout(exibirResultado, 400);
+
+  } catch (erro) {
+    // ── Rede de segurança: qualquer erro inesperado também gera resultado ──
+    console.error("Erro na análise de áudio:", erro);
     diagAtual = {
-      problema: diagGemini.problema,
-      causa: diagGemini.causa,
-      status: diagGemini.status,
-      rec: diagGemini.recomendacao,
-      conf: diagGemini.confianca,
-      base: `Análise acústica IA — ${segsGrav}s de gravação`,
-      origemIA: true
+      problema: "Não foi possível concluir a análise",
+      causa: "Ocorreu um erro técnico durante o processamento do áudio.",
+      status: "atenção",
+      rec: "Tente gravar novamente. Se o problema persistir, use a análise por sintomas.",
+      conf: 0,
+      base: "Erro no processamento",
+      origemIA: false
     };
-    window._hipoteses = (diagGemini.hipoteses || []).map(h => ({ causa: h.causa, conf: h.confianca }));
+    window._hipoteses = [];
+    clearInterval(window._procInterval);
+    const barra = document.getElementById("procBarra");
+    const status = document.getElementById("procStatus");
+    if (barra) barra.style.width = "100%";
+    if (status) status.textContent = "Relatório gerado!";
+    setTimeout(exibirResultado, 400);
   }
-
-  clearInterval(window._procInterval);
-  document.getElementById("procBarra").style.width = "100%";
-  document.getElementById("procStatus").textContent = "Relatório gerado!";
-  setTimeout(exibirResultado, 400);
 }
 
 // ════════════════════════════════
