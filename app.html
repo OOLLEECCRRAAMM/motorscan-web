@@ -1628,54 +1628,82 @@ async function coletarSintomas() {
   const marcados=[...document.querySelectorAll('#t-sintomas input[type="checkbox"]:checked')];
   if(!marcados.length){alert("Selecione pelo menos um sintoma.");return;}
   const sintomas=marcados.map(cb=>cb.value);
-  const descricao=document.getElementById("descricaoUsuario").value.trim();
+  const descEl = document.getElementById("descricaoUsuario");
+  const descricao = descEl ? descEl.value.trim() : "";
   dadosAnalise={sintomas,descricao};
   origemAudio=false;
 
-  const res=diagSintomas.map(d=>{
-    let pt=0,sConf=[];
-    d.sinRel.forEach(s=>{if(sintomas.includes(s)){pt+=pesos[s]||1;sConf.push(s);}});
-    d.combFort?.forEach(c=>{if(c.every(s=>sintomas.includes(s)))pt+=2;});
-    let confianca=pt<=1?40:pt===2?60:pt===3?75:pt===4?85:95;
-    return{...d,pt,confianca,sConf};
-  }).sort((a,b)=>b.pt-a.pt);
+  try {
+    const res=diagSintomas.map(d=>{
+      let pt=0,sConf=[];
+      d.sinRel.forEach(s=>{if(sintomas.includes(s)){pt+=pesos[s]||1;sConf.push(s);}});
+      d.combFort?.forEach(c=>{if(c.every(s=>sintomas.includes(s)))pt+=2;});
+      let confianca=pt<=1?40:pt===2?60:pt===3?75:pt===4?85:95;
+      return{...d,pt,confianca,sConf};
+    }).sort((a,b)=>b.pt-a.pt);
 
-  if(!res[0].pt){
-    diagAtual={problema:"Sinais insuficientes",causa:"Não foi possível identificar causa com os sintomas informados.",status:"atenção",rec:"Adicione mais sintomas ou use a análise acústica.",conf:0,base:"Sintomas manuais"};
-    window._hipoteses=[];
-  } else {
-    diagAtual={...res[0],conf:res[0].confianca,base:res[0].sConf.map(s=>nomesLegiveis[s]||s).join(", ")||"Sintomas manuais"};
-    window._hipoteses=res.filter(r=>r.pt>0).slice(1,3);
-  }
+    let diagFallback;
+    if(!res[0].pt){
+      diagFallback={problema:"Sinais insuficientes",causa:"Não foi possível identificar causa com os sintomas informados.",status:"atenção",rec:"Adicione mais sintomas ou use a análise acústica.",conf:0,base:"Sintomas manuais"};
+      window._hipoteses=[];
+    } else {
+      diagFallback={...res[0],conf:res[0].confianca,base:res[0].sConf.map(s=>nomesLegiveis[s]||s).join(", ")||"Sintomas manuais"};
+      window._hipoteses=res.filter(r=>r.pt>0).slice(1,3);
+    }
+    diagAtual = diagFallback;
 
-  document.querySelectorAll('#t-sintomas input[type="checkbox"]').forEach(cb=>cb.checked=false);
-  document.getElementById("descricaoUsuario").value="";
-  irParaProcessando();
+    document.querySelectorAll('#t-sintomas input[type="checkbox"]').forEach(cb=>cb.checked=false);
+    if (descEl) descEl.value="";
+    irParaProcessando();
 
-  const veiculo = JSON.parse(localStorage.getItem("motorscanVeiculo") || "null");
-  const diagGemini = await chamarGemini({
-    sintomas: sintomas.map(s => nomesLegiveis[s] || s),
-    descricao: descricao || "",
-    veiculo: veiculo ? `${veiculo.marca} ${veiculo.modelo} ${veiculo.ano}` : "não informado"
-  });
+    const veiculo = JSON.parse(localStorage.getItem("motorscanVeiculo") || "null");
+    const diagGemini = await chamarGemini({
+      sintomas: sintomas.map(s => nomesLegiveis[s] || s),
+      descricao: descricao || "",
+      veiculo: veiculo ? `${veiculo.marca} ${veiculo.modelo} ${veiculo.ano}` : "não informado"
+    });
 
-  if (diagGemini) {
+    if (diagGemini) {
+      diagAtual = {
+        problema: diagGemini.problema,
+        causa: diagGemini.causa,
+        status: diagGemini.status,
+        rec: diagGemini.recomendacao,
+        conf: diagGemini.confianca,
+        base: sintomas.map(s=>nomesLegiveis[s]||s).join(", "),
+        origemIA: true
+      };
+      window._hipoteses = (diagGemini.hipoteses || []).map(h => ({ causa: h.causa, conf: h.confianca }));
+    } else {
+      // Gemini indisponível — mantém o diagnóstico local já calculado (diagFallback)
+      diagAtual = diagFallback;
+    }
+
+    clearInterval(window._procInterval);
+    const barraEl = document.getElementById("procBarra");
+    const statusEl = document.getElementById("procStatus");
+    if (barraEl) barraEl.style.width = "100%";
+    if (statusEl) statusEl.textContent = "Relatório gerado!";
+    setTimeout(exibirResultado, 400);
+
+  } catch (erro) {
+    console.error("Erro ao coletar sintomas:", erro);
     diagAtual = {
-      problema: diagGemini.problema,
-      causa: diagGemini.causa,
-      status: diagGemini.status,
-      rec: diagGemini.recomendacao,
-      conf: diagGemini.confianca,
-      base: sintomas.map(s=>nomesLegiveis[s]||s).join(", "),
-      origemIA: true
+      problema: "Não foi possível concluir a análise",
+      causa: "Ocorreu um erro técnico durante o processamento dos sintomas.",
+      status: "atenção",
+      rec: "Tente novamente. Se o problema persistir, recarregue a página.",
+      conf: 0,
+      base: "Erro no processamento"
     };
-    window._hipoteses = (diagGemini.hipoteses || []).map(h => ({ causa: h.causa, conf: h.confianca }));
+    window._hipoteses = [];
+    clearInterval(window._procInterval);
+    const barraEl = document.getElementById("procBarra");
+    const statusEl = document.getElementById("procStatus");
+    if (barraEl) barraEl.style.width = "100%";
+    if (statusEl) statusEl.textContent = "Relatório gerado!";
+    setTimeout(exibirResultado, 400);
   }
-
-  clearInterval(window._procInterval);
-  document.getElementById("procBarra").style.width = "100%";
-  document.getElementById("procStatus").textContent = "Relatório gerado!";
-  setTimeout(exibirResultado, 400);
 }
 
 // ════════════════════════════════
@@ -1709,44 +1737,80 @@ function estiloStatus(s){
 }
 
 function exibirResultado() {
-  const d = diagAtual;
-  const icones = { urgente:"🚨", moderado:"⚠️", atenção:"🔵", estável:"✅" };
-  document.getElementById("iconeUrgencia").textContent = icones[d.status] || "🔍";
+  // ── BLINDAGEM: garante que sempre existe um diagnóstico válido para exibir ──
+  let d = diagAtual;
+  if (!d || typeof d !== "object") {
+    d = {
+      problema: "Não foi possível concluir a análise",
+      causa: "O sistema não retornou um diagnóstico válido.",
+      status: "atenção",
+      rec: "Tente novamente. Se persistir, use a análise por sintomas manuais.",
+      conf: 0,
+      base: "Erro de processamento"
+    };
+    diagAtual = d;
+  }
 
-  const cores = { urgente:"var(--vermelho)", moderado:"var(--amarelo)", atenção:"var(--azul)", estável:"var(--verde)" };
-  document.getElementById("cardPrincipal").style.borderLeftColor = cores[d.status] || "var(--amarelo)";
-  document.getElementById("cardUrgencia").style.borderLeft = `3px solid ${cores[d.status] || "var(--amarelo)"}`;
+  try {
+    const icones = { urgente:"🚨", moderado:"⚠️", atenção:"🔵", estável:"✅" };
+    const elIcone = document.getElementById("iconeUrgencia");
+    if (elIcone) elIcone.textContent = icones[d.status] || "🔍";
 
-  document.getElementById("origemBadge").innerHTML = origemAudio
-    ?`<span style="background:#0c1a3a;color:#93c5fd;padding:3px 12px;border-radius:999px;font-size:10px;font-weight:700;letter-spacing:2px;">${d.origemIA ? '🤖 GEMINI AI — ANÁLISE ACÚSTICA' : '🎙️ ANÁLISE ACÚSTICA LOCAL'}</span>`
-    :`<span style="background:#052e16;color:#86efac;padding:3px 12px;border-radius:999px;font-size:10px;font-weight:700;letter-spacing:2px;">${d.origemIA ? '🤖 GEMINI AI — SINTOMAS' : '📋 ANÁLISE LOCAL — SINTOMAS'}</span>`;
+    const cores = { urgente:"var(--vermelho)", moderado:"var(--amarelo)", atenção:"var(--azul)", estável:"var(--verde)" };
+    const elCard = document.getElementById("cardPrincipal");
+    if (elCard) elCard.style.borderLeftColor = cores[d.status] || "var(--amarelo)";
+    const elCardUrg = document.getElementById("cardUrgencia");
+    if (elCardUrg) elCardUrg.style.borderLeft = `3px solid ${cores[d.status] || "var(--amarelo)"}`;
 
-  document.getElementById("rCausa").textContent = d.causa || d.problema;
+    const elBadge = document.getElementById("origemBadge");
+    if (elBadge) {
+      elBadge.innerHTML = origemAudio
+        ?`<span style="background:#0c1a3a;color:#93c5fd;padding:3px 12px;border-radius:999px;font-size:10px;font-weight:700;letter-spacing:2px;">${d.origemIA ? '🤖 GEMINI AI — ANÁLISE ACÚSTICA' : '🎙️ ANÁLISE ACÚSTICA LOCAL'}</span>`
+        :`<span style="background:#052e16;color:#86efac;padding:3px 12px;border-radius:999px;font-size:10px;font-weight:700;letter-spacing:2px;">${d.origemIA ? '🤖 GEMINI AI — SINTOMAS' : '📋 ANÁLISE LOCAL — SINTOMAS'}</span>`;
+    }
 
-  const statusEl = document.getElementById("rStatus");
-  statusEl.textContent = d.status;
-  statusEl.style.cssText = `display:inline-block;padding:3px 14px;border-radius:999px;font-size:12px;font-weight:700;${estiloStatus(d.status)}`;
+    const elCausa = document.getElementById("rCausa");
+    if (elCausa) elCausa.textContent = d.causa || d.problema || "---";
 
-  const conf = d.conf || 0;
-  document.getElementById("rConfianca").textContent = conf + "%";
+    const statusEl = document.getElementById("rStatus");
+    if (statusEl) {
+      statusEl.textContent = d.status || "atenção";
+      statusEl.style.cssText = `display:inline-block;padding:3px 14px;border-radius:999px;font-size:12px;font-weight:700;${estiloStatus(d.status)}`;
+    }
 
-  setTimeout(() => {
-    document.getElementById("barraConfianca").style.width = conf + "%";
-    const corBarra = conf >= 80 ? "var(--verde)" : conf >= 50 ? "var(--amarelo)" : "var(--vermelho)";
-    document.getElementById("barraConfianca").style.background = corBarra;
-    document.getElementById("rConfianca").style.color = corBarra;
-  }, 300);
+    const conf = d.conf || 0;
+    const elConf = document.getElementById("rConfianca");
+    if (elConf) elConf.textContent = conf + "%";
 
-  document.getElementById("rRecomendacao").textContent = d.rec || d.recomendacao || "---";
-  document.getElementById("rBase").textContent = d.base || "---";
+    setTimeout(() => {
+      const elBarra = document.getElementById("barraConfianca");
+      const elConf2 = document.getElementById("rConfianca");
+      const corBarra = conf >= 80 ? "var(--verde)" : conf >= 50 ? "var(--amarelo)" : "var(--vermelho)";
+      if (elBarra) { elBarra.style.width = conf + "%"; elBarra.style.background = corBarra; }
+      if (elConf2) elConf2.style.color = corBarra;
+    }, 300);
 
-  const hip = window._hipoteses || [];
-  document.getElementById("rHipoteses").innerHTML = hip.length
-    ? hip.map((h,i) => `<div style="margin-bottom:4px;">${i+2}ª: ${h.causa||h.nome} — ${h.conf||h.confianca||0}%</div>`).join("")
-    : "Nenhuma hipótese complementar.";
+    const elRec = document.getElementById("rRecomendacao");
+    if (elRec) elRec.textContent = d.rec || d.recomendacao || "---";
+    const elBase = document.getElementById("rBase");
+    if (elBase) elBase.textContent = d.base || "---";
 
-  salvarHistorico(d);
-  irPara("t-resultado");
+    const hip = window._hipoteses || [];
+    const elHip = document.getElementById("rHipoteses");
+    if (elHip) {
+      elHip.innerHTML = hip.length
+        ? hip.map((h,i) => `<div style="margin-bottom:4px;">${i+2}ª: ${h.causa||h.nome} — ${h.conf||h.confianca||0}%</div>`).join("")
+        : "Nenhuma hipótese complementar.";
+    }
+
+    salvarHistorico(d);
+    irPara("t-resultado");
+
+  } catch (erro) {
+    console.error("Erro ao exibir resultado:", erro);
+    // Mesmo se algo falhar na exibição, força a troca de tela para não travar
+    irPara("t-resultado");
+  }
 }
 
 // ════════════════════════════════
