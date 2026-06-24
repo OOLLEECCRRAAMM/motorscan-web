@@ -1,4 +1,4 @@
-const CACHE_NAME = 'motorscan-cache-v2';
+const CACHE_NAME = 'motorscan-cache-v3';
 const urlsToCache = [
   '/',
   '/app.html',
@@ -30,19 +30,27 @@ self.addEventListener('activate', event => {
 });
 
 self.addEventListener('fetch', event => {
-  if (event.request.method !== 'GET') return;
-  if (event.request.url.includes('/api/')) return;
+  const url = event.request.url;
 
-  // ── CORREÇÃO: para o app.html, SEMPRE busca a versão mais recente da rede primeiro ──
-  // Isso garante que atualizações de código apareçam imediatamente, sem esperar o usuário
-  // limpar o cache manualmente. Só usa o cache salvo se a rede estiver indisponível (offline).
-  if (event.request.url.includes('app.html') || event.request.mode === 'navigate') {
+  // CORREÇÃO CRÍTICA: ignora requisições que não são http/https
+  // Extensões do Chrome (chrome-extension://) disparam requisições que o
+  // Cache API não consegue armazenar, travando a Promise para sempre.
+  if (!url.startsWith('http://') && !url.startsWith('https://')) {
+    return;
+  }
+
+  if (event.request.method !== 'GET') return;
+  if (url.includes('/api/')) return;
+
+  if (url.includes('app.html') || event.request.mode === 'navigate') {
     event.respondWith(
       fetch(event.request)
         .then(fetchResponse => {
           if (fetchResponse && fetchResponse.status === 200) {
             const responseClone = fetchResponse.clone();
-            caches.open(CACHE_NAME).then(cache => cache.put(event.request, responseClone));
+            caches.open(CACHE_NAME).then(cache => {
+              cache.put(event.request, responseClone).catch(() => {});
+            });
           }
           return fetchResponse;
         })
@@ -51,7 +59,6 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // Para os demais arquivos (fontes, ícones, bibliotecas) mantém o comportamento de cache-first
   event.respondWith(
     caches.match(event.request)
       .then(response => {
@@ -59,7 +66,9 @@ self.addEventListener('fetch', event => {
         return fetch(event.request).then(fetchResponse => {
           if (!fetchResponse || fetchResponse.status !== 200) return fetchResponse;
           const responseClone = fetchResponse.clone();
-          caches.open(CACHE_NAME).then(cache => cache.put(event.request, responseClone));
+          caches.open(CACHE_NAME).then(cache => {
+            cache.put(event.request, responseClone).catch(() => {});
+          });
           return fetchResponse;
         });
       })
