@@ -1332,6 +1332,7 @@ window.addEventListener("resize", () => {
 let audioCtx=null, analisador=null, mediaStream=null;
 let estaGravando=false, timerGrav=null, segsGrav=0;
 let animAudio=null, dadosFFT=null, espeOff=0;
+let acumuladorFFT=null, qtdAmostras=0;
 let espeCtx=null, freqCtx=null;
 // ── CORREÇÃO 1: variável para guardar o último estado dos padrões ──
 let ultimaDeteccaoHTML = "";
@@ -1359,6 +1360,7 @@ async function alternarGravacao() {
     analisador.smoothingTimeConstant = .8;
     audioCtx.createMediaStreamSource(mediaStream).connect(analisador);
     estaGravando=true; segsGrav=0; dadosFFT=null; espeOff=0;
+    acumuladorFFT=null; qtdAmostras=0;
     ultimaDeteccaoHTML = ""; // limpa padrões anteriores
 
     document.getElementById("btnGravar").classList.add("gravando");
@@ -1392,7 +1394,13 @@ function pararGravacao() {
   estaGravando=false; clearInterval(timerGrav);
   cancelAnimationFrame(animAudio);
 
-  if (analisador) {
+  // ── CORREÇÃO: usa a MÉDIA de toda a gravação, não apenas o instante final ──
+  if (acumuladorFFT && qtdAmostras > 0) {
+    dadosFFT = new Uint8Array(acumuladorFFT.length);
+    for (let i = 0; i < acumuladorFFT.length; i++) {
+      dadosFFT[i] = Math.round(acumuladorFFT[i] / qtdAmostras);
+    }
+  } else if (analisador) {
     dadosFFT=new Uint8Array(analisador.frequencyBinCount);
     analisador.getByteFrequencyData(dadosFFT);
   }
@@ -1428,6 +1436,15 @@ function visualizarAudio() {
   if (!estaGravando||!analisador) return;
   const buf = new Uint8Array(analisador.frequencyBinCount);
   analisador.getByteFrequencyData(buf);
+
+  // ── CORREÇÃO: acumula a soma de cada frequência ao longo de toda a gravação ──
+  // Antes, só a última amostra (1 instante) era usada para o diagnóstico final.
+  // Agora calculamos a MÉDIA de todos os frames captados durante os 15s,
+  // o que reflete o som real do motor e não um instante aleatório/silêncio.
+  if (!acumuladorFFT) acumuladorFFT = new Float64Array(buf.length);
+  for (let i = 0; i < buf.length; i++) acumuladorFFT[i] += buf[i];
+  qtdAmostras++;
+
   desenharEspectrograma(buf); desenharFreq(buf);
   atualizarNivel(buf); detectarTempoReal(buf);
   animAudio = requestAnimationFrame(visualizarAudio);
@@ -1503,8 +1520,14 @@ async function analisarAudioGravado() {
     const sr = audioCtx?.sampleRate || 44100;
     const bs = sr / 2048;
     let resumoFreq = "Frequências com maior amplitude detectadas:\n";
-    let melhorPadrao = null, melhorPct = 0;
+    let melhorPadrao = null, melhorPct = 0, melhorScore = 0;
 
+    // ── CORREÇÃO: compara cada padrão de forma RELATIVA ao seu próprio limite (f.lim) ──
+    // Antes, o "vencedor" era sempre quem tivesse a maior amplitude absoluta (0-255),
+    // o que favorecia sempre as frequências mais graves (onde motores têm mais energia
+    // naturalmente), mascarando completamente padrões em frequências mais agudas
+    // como pastilha de freio ou rolamento. Agora usamos um "score" = média / limite,
+    // assim cada padrão é avaliado relativo ao seu próprio patamar de detecção.
     for (const [chave, f] of Object.entries(BRAIN)) {
       const bMin = Math.floor(f.fMin / bs);
       const bMax = Math.ceil(f.fMax / bs);
@@ -1514,19 +1537,24 @@ async function analisarAudioGravado() {
       }
       const media = count > 0 ? soma / count : 0;
       const pct = Math.round((media / 255) * 100);
+      const score = media / f.lim; // proporção relativa ao limite de detecção do padrão
       if (pct > 10) resumoFreq += `- ${f.nome} (${f.fMin}–${f.fMax} Hz): intensidade ${pct}%\n`;
-      if (pct > melhorPct) { melhorPct = pct; melhorPadrao = f; }
+      if (score > melhorScore) { melhorScore = score; melhorPct = pct; melhorPadrao = f; }
     }
 
     // ── Diagnóstico de fallback local — usado se o Gemini falhar ──
+    // CORREÇÃO: agora exige que o score relativo (score > 0.6, ou seja, pelo menos
+    // 60% do limite de detecção daquele padrão específico) para ser considerado válido.
+    // A confiança exibida também é baseada no score real, não na amplitude bruta.
     let diagFallback;
-    if (melhorPadrao && melhorPct > 15) {
+    if (melhorPadrao && melhorScore > 0.6) {
+      const confCalculada = Math.min(Math.round(melhorScore * 60), 90);
       diagFallback = {
         problema: melhorPadrao.nome,
         causa: melhorPadrao.msg,
         status: melhorPadrao.status,
         rec: melhorPadrao.rec,
-        conf: Math.min(melhorPct, 85),
+        conf: confCalculada,
         base: `Análise acústica local — ${segsGrav}s de gravação`,
         origemIA: false
       };
