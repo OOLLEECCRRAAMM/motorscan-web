@@ -1015,7 +1015,7 @@ const BRAIN = {
   amortecedor:       { nome:"Amortecedor desgastado",  fMin:5,    fMax:30,   lim:130, status:"moderado", msg:"Ruído surdo em irregularidades — amortecedor sem pressão.",   rec:"Teste: carro não deve oscilar mais de 1 vez após solavanco.", icone:"🚗" },
   barra_estabiliz:   { nome:"Barra estabilizadora",    fMin:50,   fMax:200,  lim:118, status:"atenção",  msg:"Estalos ao fazer curvas — bucha ou terminal desgastado.",     rec:"Solicite inspeção das buchas e terminais da barra.", icone:"📐" },
   // ── ESCAPE / ARREFECIMENTO ──
-  vazamento_escape:  { nome:"Vazamento no escape",     fMin:80,   fMax:300,  lim:110, status:"atenção",  msg:"Perda de pressão no sistema de exaustão.",                   rec:"Inspecione o coletor com motor frio. Procure fuligem nas juntas.", icone:"💨" },
+  vazamento_escape:  { nome:"Vazamento no escape",     fMin:80,   fMax:300,  lim:125, status:"atenção",  msg:"Perda de pressão no sistema de exaustão.",                   rec:"Inspecione o coletor com motor frio. Procure fuligem nas juntas.", icone:"💨" },
   superaquecimento:  { nome:"Superaquecimento",         fMin:20,   fMax:60,   lim:105, status:"urgente",  msg:"Fervura do líquido de arrefecimento detectada.",              rec:"Desligue o motor. Não abra o radiador quente. Chame socorro.", icone:"🌡️" },
   // ── ALTERNADOR / ELÉTRICO ──
   rolamento:         { nome:"Rolamento desgastado",    fMin:4000, fMax:8000, lim:100, status:"atenção",  msg:"Frequência de ressonância de componente rotativo alterada.",  rec:"Identifique a origem — roda, alternador ou tensor.", icone:"🔄" },
@@ -1528,18 +1528,32 @@ async function analisarAudioGravado() {
     // naturalmente), mascarando completamente padrões em frequências mais agudas
     // como pastilha de freio ou rolamento. Agora usamos um "score" = média / limite,
     // assim cada padrão é avaliado relativo ao seu próprio patamar de detecção.
+    // ── CORREÇÃO QG 13/10/2026 (falso "vazamento no escape") ──
+    // Todo motor ligado gravado pelo celular tem muita energia natural entre ~80 e 400 Hz.
+    // Como a faixa do escape (80–300 Hz) cai bem nessa região e tinha o menor limite (lim)
+    // entre os padrões graves, ela "ganhava" quase sempre — mesmo em motor saudável.
+    // Agora o vencedor é o padrão cuja faixa mais se DESTACA das faixas vizinhas
+    // (uma oitava abaixo e uma acima): precisa haver um pico real, não só o ronco normal.
+    // Continua valendo a exigência de nível mínimo (60% do lim do padrão).
+    const CONTRASTE_MIN = 20; // ~5,5 dB acima da média das vizinhas (escala 0–255 ≈ 70 dB)
+    const mediaFaixa = (hzMin, hzMax) => {
+      const a = Math.max(1, Math.floor(hzMin / bs)); // ignora o bin 0 (corrente contínua)
+      const b = Math.min(Math.ceil(hzMax / bs), dadosFFT.length - 1);
+      let s = 0, c = 0;
+      for (let i = a; i <= b; i++) { s += dadosFFT[i]; c++; }
+      return c > 0 ? s / c : 0;
+    };
+    let melhorContraste = 0;
     for (const [chave, f] of Object.entries(BRAIN)) {
-      const bMin = Math.floor(f.fMin / bs);
-      const bMax = Math.ceil(f.fMax / bs);
-      let soma = 0, count = 0;
-      for (let i = bMin; i <= Math.min(bMax, dadosFFT.length - 1); i++) {
-        soma += dadosFFT[i]; count++;
-      }
-      const media = count > 0 ? soma / count : 0;
+      const media = mediaFaixa(f.fMin, f.fMax);
+      const vizinhas = (mediaFaixa(f.fMin / 2, f.fMin) + mediaFaixa(f.fMax, f.fMax * 2)) / 2;
+      const contraste = media - vizinhas;
       const pct = Math.round((media / 255) * 100);
       const score = media / f.lim; // proporção relativa ao limite de detecção do padrão
-      if (pct > 10) resumoFreq += `- ${f.nome} (${f.fMin}–${f.fMax} Hz): intensidade ${pct}%\n`;
-      if (score > melhorScore) { melhorScore = score; melhorPct = pct; melhorPadrao = f; }
+      if (pct > 10) resumoFreq += `- ${f.nome} (${f.fMin}–${f.fMax} Hz): intensidade ${pct}%, destaque sobre faixas vizinhas ${contraste >= 0 ? "+" : ""}${Math.round(contraste)}\n`;
+      if (score > 0.6 && contraste >= CONTRASTE_MIN && contraste > melhorContraste) {
+        melhorContraste = contraste; melhorScore = score; melhorPct = pct; melhorPadrao = f;
+      }
     }
 
     // ── Diagnóstico de fallback local — usado se o Gemini falhar ──
